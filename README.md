@@ -43,7 +43,13 @@ The evaluation results below are computed using our initial release of test prom
 
 | Metric | Query-Success-Rate | Finish-ToolCalls-Rate | ToolCalls-Trigger Similarity | ToolCalls-Accuracy | Response Success Rate - Not Only Reasoning | Language-Following-Success-Rate |
 |--------|--------------------|-----------------------|------------------------------|--------------------|--------------------------------------------|----------------------------------|
-| minimax-m2.5 | 100% | 84.44% | - | 96.65% | 100% | 90.00% |
+| minimax-m2.5 | 100% | 84.75% | - | 97.26% | 100% | 90% |
+| openRouter-minimax-fp8 | 100% | 84.55% | 98.98% | 97.25% | 100% | 80% |
+| openRouter-minimax-highspeed | 100% | 84.14% | 99.22% | 97.24% | 100% | 80% |
+| openRouter-novita-bf16 | 100% | 84.65% | 99.05% | 97.5% | 100% | 70% |
+| openRouter-siliconflow/fp8 | 100% | 84.24% | 99.28% | 98.68% | 100% | 80% |
+| openRouter-atlas-cloud/fp8 | 100% | 84.75% | 99.10% | 96.18% | 100% | 70% |
+| openRouter-fireworks | 96.32% | 81.63% | 98.87% | 96.19% | 100% | 80% |
 
 ### MiniMax-M2.1 Model – Jan 2026 Data
 
