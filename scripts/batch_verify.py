@@ -34,7 +34,7 @@ async def run_provider_verification(
     summary_file = os.path.join(output_dir, f"{provider_name}_summary.json")
     
     try:
-        # 合并 extra_body：命令行参数优先级高于 provider_config
+        # Merge extra_body: command line arguments take precedence over provider_config
         merged_extra_body = provider_config.get("extra_body", {})
         if extra_body:
             merged_extra_body.update(extra_body)
@@ -282,7 +282,6 @@ async def main():
     
     args = parser.parse_args()
     
-    # 解析 extra_body JSON 字符串
     extra_body = None
     if args.extra_body:
         try:
