@@ -13,20 +13,17 @@
 * **请求成功率（Query-Success-Rate）：** 衡量在允许最多 `max_retry=10` 次尝试的情况下，供应商最终成功返回有效响应的概率。
   - `query_success_rate = successful_query_count / total_query_count`
 
-* **工具调用率（Finish-ToolCalls-Rate）：** 模型触发工具调用的比例（不考量参数正确性，仅考量是否触发）。
-  - `finish_tool_calls_rate = finish_tool_calls_count / total_query_count`
+* **工具调用匹配率（ToolCalls-Match-Rate）：** 衡量模型在"是否触发工具调用"这一行为上与预期标签的匹配程度。每个测试用例都标注了 `expected_tool_call`（是否预期触发工具调用），该指标计算预期与实际结果相符的比例。
+  - `tool_calls_match_rate = (tool_calls_finish_tool_calls + stop_finish_stop) / success_count`
+  - 四项限统计（混淆矩阵）：
+    - `tool_calls_finish_tool_calls`: 预期 tool_call，实际 tool_call (TP)
+    - `tool_calls_finish_stop`: 预期 tool_call，实际 stop (FN)
+    - `stop_finish_tool_calls`: 预期 stop，实际 tool_call (FP)
+    - `stop_finish_stop`: 预期 stop，实际 stop (TN)
 
-* **工具调用触发相似度（ToolCalls-Trigger Similarity）：**  使用 F1 Score 衡量供应商模型与官方参考模型在“是否触发工具”这一行为上的一致性。引用了 K2-Vendor-Verifier 中使用的方法，用于检测部署正确性。参考：[MoonshotAI/K2-Vendor-Verifier](https://github.com/MoonshotAI/K2-Vendor-Verifier)。
+* **工具调用参数准确率（ToolCalls-Schema-Accuracy）：** 在触发工具调用的前提下，生成的函数名和参数符合预期模式的比例。
+  - `schema_accuracy = tool_calls_successful_count / tool_calls_finish_tool_calls`
 
-  - 定义 `TP = count(供应商触发 AND 官方触发)`, `FP = count(供应商触发 AND 官方未触发)`, `FN = count(供应商未触发 AND 官方触发)`
-
-  - `Precision = TP / (TP + FP)`, `Recall = TP / (TP + FN)`
-
-  - `F1 = 2 · Precision · Recall / (Precision + Recall)`
-
-
-* **工具调用准确率（ToolCalls-Accuracy）：** 在触发工具调用的前提下，生成的函数名和参数符合预期模式的比例。
-  - `accuracy = tool_calls_successful_count / tool_calls_finish_tool_calls`
 
 * **响应有效率（Response-Success-Rate Not Only Reasoning）：** 检测模型是否陷入“仅输出推理过程（Chain-of-Thought）但无有效内容或工具调用”的错误模式。此类模式通常意味着部署存在问题。
   - `Response-success-rate = response_not_only_reasoning_count / only_reasoning_checked_count`
