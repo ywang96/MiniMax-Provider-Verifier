@@ -51,6 +51,8 @@ class ToolCallsValidator(BaseValidator):
             "stop_finish_stop": 0,               # expected stop, actual stop (TN)
             "tool_calls_finish_others": 0,
             "tool_calls_finish_others_detail": {},
+            # Expected tool call count (denominator for match rate)
+            "expected_tool_call_total_count": 0,  # Total labeled count (True + False)
             # Schema validation stats
             "tool_calls_schema_validation_error_count": 0,
             "tool_calls_successful_count": 0,
@@ -65,6 +67,10 @@ class ToolCallsValidator(BaseValidator):
             expected_tool_call = r.get("expected_tool_call")
 
             summary["tool_calls_total_count"] += tool_calls_count
+
+            # Count expected_tool_call labels
+            if expected_tool_call is True or expected_tool_call is False:
+                summary["expected_tool_call_total_count"] += 1
 
             # Classify into confusion matrix based on expected and actual
             actual_tool_call = (finish_reason == "tool_calls")

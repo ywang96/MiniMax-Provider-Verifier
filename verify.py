@@ -50,6 +50,10 @@ class ValidatorRunner:
         extra_body: Optional[dict] = None,
         incremental: bool = False,
         validators: Optional[list[BaseValidator]] = None,
+        stream: bool = False,
+        debug: bool = False,
+        openrouter_provider: Optional[str] = None,
+        api_format: str = "openai",
     ):
         self.model = model
         self.base_url = base_url
@@ -62,6 +66,10 @@ class ValidatorRunner:
         self.output_file = output_file
         self.summary_file = summary_file
         self.incremental = incremental
+        self.stream = stream
+        self.debug = debug
+        self.openrouter_provider = openrouter_provider
+        self.api_format = api_format
         
         # Validators management
         # If no validators specified, use default ToolCallsValidator

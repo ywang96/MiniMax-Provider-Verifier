@@ -128,6 +128,43 @@ python verify.py sample.jsonl \
 - `--extra-body` (可选，JSON 字符串): 要合并到每个请求中的额外字段（例如解码参数）。
 - `--incremental` (标志): 仅重新运行之前失败或新的请求，与现有输出合并，重新统计结果。
 
+### 批量测试（推荐：pass@10）
+
+为了获得具有统计显著性的全面评估结果，我们推荐使用批量验证脚本，该脚本会执行多次迭代并聚合指标：
+
+```bash
+bash run_batch_sequential.sh \
+  --module 'provider-name' \
+  --url 'https://api.example.com/v1/' \
+  --model 'model-name' \
+  --api-key 'your-api-key' \
+  --max-workers 10 \
+  --mm-model 'MiniMax-M2.5'
+```
+
+**参数说明：**
+
+- `--module`: Provider/模块名称（必需）
+- `--url`: API 端点 URL（必需）
+- `--model`: 模型名称（必需）
+- `--api-key`: API 密钥（必需）
+- `--max-workers`: 并发请求数（默认：10）
+- `--stream`: 启用流式模式
+- `--debug`: 调试模式，仅运行前 10 个用例
+- `--extra-body`: 额外的请求体参数（JSON 格式）
+- `--mm-model`: 用于对比的 MiniMax 基准模型名称（默认：MiniMax-M2.5）
+
+脚本将执行以下操作：
+1. 执行 10 次验证循环（pass@10）
+2. 计算所有循环的聚合指标
+3. 与基准模型进行对比
+4. 在 `output-dir/batch_<timestamp>/` 中生成详细的指标报告
+
+**输出文件：**
+- `metrics_report.json`: 所有循环的聚合指标
+- `comparison_report.json`: 与基准模型的对比结果
+- 各循环的单独结果位于 `loop_01/`、`loop_02/` 等目录
+
 ## 后续计划
 
 - [ ] 扩展和完善评估集。

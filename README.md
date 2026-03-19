@@ -128,6 +128,43 @@ python verify.py sample.jsonl \
 - `--extra-body` (optional, JSON string): Extra fields to merge into each request's payload (e.g., decoding parameters).
 - `--incremental` (flag): Only rerun previously failed or new requests, merging with existing output; recomputes the summary.
 
+### Batch Testing (Recommended: pass@10)
+
+For comprehensive evaluation with statistical significance, we recommend using the batch verification script which runs multiple iterations and aggregates metrics:
+
+```bash
+bash run_batch_sequential.sh \
+  --module 'provider-name' \
+  --url 'https://api.example.com/v1/' \
+  --model 'model-name' \
+  --api-key 'your-api-key' \
+  --max-workers 10 \
+  --mm-model 'MiniMax-M2.5'
+```
+
+**Parameters:**
+
+- `--module`: Provider/module name (required)
+- `--url`: API endpoint URL (required)
+- `--model`: Model name (required)
+- `--api-key`: API key (required)
+- `--max-workers`: Concurrent request count (default: 10)
+- `--stream`: Enable streaming mode
+- `--debug`: Debug mode, only run first 10 cases
+- `--extra-body`: Extra request body parameters (JSON format)
+- `--mm-model`: MiniMax baseline model name for comparison (default: MiniMax-M2.5)
+
+The script will:
+1. Execute 10 verification loops (pass@10)
+2. Calculate aggregated metrics across all loops
+3. Compare results with the baseline model
+4. Generate detailed metrics reports in `output-dir/batch_<timestamp>/`
+
+**Output:**
+- `metrics_report.json`: Aggregated metrics from all loops
+- `comparison_report.json`: Comparison with baseline model
+- Individual loop results in `loop_01/`, `loop_02/`, etc.
+
 ## Roadmap
 
 - [ ] Expand and refine the evaluation set.
