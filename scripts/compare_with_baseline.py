@@ -86,11 +86,13 @@ def calculate_metrics_from_summary(data: Dict) -> Dict:
     success_count = data.get('success_count', 0)
     metrics['Query-Success-Rate'] = success_count / all_count if all_count > 0 else 0
     
-    finish_tool_calls_count = data.get('tool_calls_finish_tool_calls', 0)
-    metrics['Finish-ToolCalls-Rate'] = finish_tool_calls_count / all_count if all_count > 0 else 0
+    tool_calls_finish_tool_calls = data.get('tool_calls_finish_tool_calls', 0)
+    stop_finish_stop = data.get('stop_finish_stop', 0)
+    expected_tool_call_total_count = data.get('expected_tool_call_total_count', 0)
+    metrics['ToolCalls-Match-Rate'] = (tool_calls_finish_tool_calls + stop_finish_stop) / expected_tool_call_total_count if expected_tool_call_total_count > 0 else 0
     
     tool_calls_successful_count = data.get('tool_calls_successful_count', 0)
-    metrics['ToolCalls-Accuracy'] = tool_calls_successful_count / finish_tool_calls_count if finish_tool_calls_count > 0 else 0
+    metrics['ToolCalls-Accuracy'] = tool_calls_successful_count / tool_calls_finish_tool_calls if tool_calls_finish_tool_calls > 0 else 0
     
     error_only_reasoning_count = data.get('error_only_reasoning_count', 0)
     error_only_reasoning_checked_count = data.get('error_only_reasoning_checked_count', 0)
@@ -282,7 +284,7 @@ def calculate_average_metrics(all_results: List[Dict]) -> Dict:
     
     metric_keys = [
         'Query-Success-Rate',
-        'Finish-ToolCalls-Rate',
+        'ToolCalls-Match-Rate',
         'ToolCalls-Trigger-Similarity-F1',
         'ToolCalls-Accuracy',
         'Response-Success-Rate-Not-Only-Reasoning',
@@ -364,7 +366,7 @@ def print_comparison_table(all_results: List[Dict], avg_metrics: Dict):
             sim_str = f"{sim_f1*100:>10.2f}%" if sim_f1 is not None else "N/A".rjust(12)
             print(f"{loop_name:<15} {model:<25} "
                   f"{metrics.get('Query-Success-Rate', 0)*100:>8.2f}% "
-                  f"{metrics.get('Finish-ToolCalls-Rate', 0)*100:>8.2f}% "
+                  f"{metrics.get('ToolCalls-Match-Rate', 0)*100:>8.2f}% "
                   f"{sim_str} "
                   f"{metrics.get('ToolCalls-Accuracy', 0)*100:>8.2f}% "
                   f"{metrics.get('Response-Success-Rate-Not-Only-Reasoning', 0)*100:>8.2f}% "
@@ -372,7 +374,7 @@ def print_comparison_table(all_results: List[Dict], avg_metrics: Dict):
         else:
             print(f"{loop_name:<15} {model:<25} "
                   f"{metrics.get('Query-Success-Rate', 0)*100:>8.2f}% "
-                  f"{metrics.get('Finish-ToolCalls-Rate', 0)*100:>8.2f}% "
+                  f"{metrics.get('ToolCalls-Match-Rate', 0)*100:>8.2f}% "
                   f"{metrics.get('ToolCalls-Accuracy', 0)*100:>8.2f}% "
                   f"{metrics.get('Response-Success-Rate-Not-Only-Reasoning', 0)*100:>8.2f}% "
                   f"{metrics.get('Language-Following-Success-Rate', 0)*100:>8.2f}%")
@@ -383,7 +385,7 @@ def print_comparison_table(all_results: List[Dict], avg_metrics: Dict):
     if avg_metrics:
         print(f"\n📈 Average Metrics ({len(successful_results)} comparisons):")
         print(f"  1. Query-Success-Rate: {avg_metrics.get('Query-Success-Rate', 0):.4f} ({avg_metrics.get('Query-Success-Rate', 0)*100:.2f}%)")
-        print(f"  2. Finish-ToolCalls-Rate: {avg_metrics.get('Finish-ToolCalls-Rate', 0):.4f} ({avg_metrics.get('Finish-ToolCalls-Rate', 0)*100:.2f}%)")
+        print(f"  2. ToolCalls-Match-Rate: {avg_metrics.get('ToolCalls-Match-Rate', 0):.4f} ({avg_metrics.get('ToolCalls-Match-Rate', 0)*100:.2f}%)")
         if 'ToolCalls-Trigger-Similarity-F1' in avg_metrics:
             print(f"  3. ToolCalls-Trigger-Similarity-F1: {avg_metrics['ToolCalls-Trigger-Similarity-F1']:.4f} ({avg_metrics['ToolCalls-Trigger-Similarity-F1']*100:.2f}%)")
         print(f"  4. ToolCalls-Accuracy: {avg_metrics.get('ToolCalls-Accuracy', 0):.4f} ({avg_metrics.get('ToolCalls-Accuracy', 0)*100:.2f}%)")
