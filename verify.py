@@ -50,6 +50,10 @@ class ValidatorRunner:
         extra_body: Optional[dict] = None,
         incremental: bool = False,
         validators: Optional[list[BaseValidator]] = None,
+        stream: bool = False,
+        debug: bool = False,
+        openrouter_provider: Optional[str] = None,
+        api_format: str = "openai",
     ):
         self.model = model
         self.base_url = base_url
@@ -62,6 +66,10 @@ class ValidatorRunner:
         self.output_file = output_file
         self.summary_file = summary_file
         self.incremental = incremental
+        self.stream = stream
+        self.debug = debug
+        self.openrouter_provider = openrouter_provider
+        self.api_format = api_format
         
         # Validators management
         # If no validators specified, use default ToolCallsValidator
@@ -122,6 +130,7 @@ class ValidatorRunner:
             req["model"] = self.model
         # Remove custom fields, do not pass to API
         req.pop("check_type", None)
+        req.pop("expected_tool_call", None)
         return req
 
     def read_jsonl(self, file_path: str) -> list[dict]:
@@ -281,6 +290,7 @@ class ValidatorRunner:
                 "duration_ms": duration_ms,
                 "hash": prepared_req["hash"],
                 "provider": response.get("provider", ''),
+                "expected_tool_call": prepared_req.get("raw", {}).get("expected_tool_call"),
             }
             
             # Extract finish_reason and content for backward compatibility
@@ -446,6 +456,12 @@ class ValidatorRunner:
             summary["success_rate"] = round(summary["success_count"] / summary["all_count"], 2)
         else:
             summary["success_rate"] = 0.0
+        
+        # Compute tool calls accuracy: (matched / success_count)
+        # matched = tool_calls_finish_tool_calls (TP) + stop_finish_stop (TN)
+        if summary["success_count"] > 0 and "tool_calls_finish_tool_calls" in summary:
+            matched = summary.get("tool_calls_finish_tool_calls", 0) + summary.get("stop_finish_stop", 0)
+            summary["tool_calls_accuracy"] = round(matched / summary["success_count"], 4)
         
         self.summary = summary
 

@@ -44,10 +44,16 @@ class ToolCallsValidator(BaseValidator):
     def compute_summary(self, results: list[dict]) -> dict:
         """Compute summary statistics for tool calls validation."""
         summary = {
-            "tool_calls_finish_stop": 0,
-            "tool_calls_finish_tool_calls": 0,
+            # Confusion matrix: expected vs actual
+            "tool_calls_finish_tool_calls": 0,  # expected tool_call, actual tool_call (TP)
+            "tool_calls_finish_stop": 0,         # expected tool_call, actual stop (FN)
+            "stop_finish_tool_calls": 0,         # expected stop, actual tool_call (FP)
+            "stop_finish_stop": 0,               # expected stop, actual stop (TN)
             "tool_calls_finish_others": 0,
             "tool_calls_finish_others_detail": {},
+            # Expected tool call count (denominator for match rate)
+            "expected_tool_call_total_count": 0,  # Total labeled count (True + False)
+            # Schema validation stats
             "tool_calls_schema_validation_error_count": 0,
             "tool_calls_successful_count": 0,
             "tool_calls_total_count": 0,
@@ -58,25 +64,60 @@ class ToolCallsValidator(BaseValidator):
             finish_reason = r.get("tool_calls_finish_reason")
             tool_calls_valid = r.get("tool_calls_valid")
             tool_calls_count = r.get("tool_calls_count", 0)
+            expected_tool_call = r.get("expected_tool_call")
 
             summary["tool_calls_total_count"] += tool_calls_count
 
-            if finish_reason == "stop":
-                summary["tool_calls_finish_stop"] += 1
-            elif finish_reason == "tool_calls":
-                summary["tool_calls_finish_tool_calls"] += 1
-                if tool_calls_valid:
-                    summary["tool_calls_successful_count"] += 1
-                else:
-                    summary["tool_calls_schema_validation_error_count"] += 1
+            # Count expected_tool_call labels
+            if expected_tool_call is True or expected_tool_call is False:
+                summary["expected_tool_call_total_count"] += 1
 
-                count_key = str(tool_calls_count)
-                summary["tool_calls_count_distribution"].setdefault(count_key, 0)
-                summary["tool_calls_count_distribution"][count_key] += 1
-            elif finish_reason:
-                summary["tool_calls_finish_others"] += 1
-                summary["tool_calls_finish_others_detail"].setdefault(finish_reason, 0)
-                summary["tool_calls_finish_others_detail"][finish_reason] += 1
+            # Classify into confusion matrix based on expected and actual
+            actual_tool_call = (finish_reason == "tool_calls")
+            actual_stop = (finish_reason == "stop")
+
+            if expected_tool_call is True:
+                if actual_tool_call:
+                    summary["tool_calls_finish_tool_calls"] += 1
+                    if tool_calls_valid:
+                        summary["tool_calls_successful_count"] += 1
+                    else:
+                        summary["tool_calls_schema_validation_error_count"] += 1
+                    count_key = str(tool_calls_count)
+                    summary["tool_calls_count_distribution"].setdefault(count_key, 0)
+                    summary["tool_calls_count_distribution"][count_key] += 1
+                elif actual_stop:
+                    summary["tool_calls_finish_stop"] += 1
+                elif finish_reason:
+                    summary["tool_calls_finish_others"] += 1
+                    summary["tool_calls_finish_others_detail"].setdefault(finish_reason, 0)
+                    summary["tool_calls_finish_others_detail"][finish_reason] += 1
+            elif expected_tool_call is False:
+                if actual_tool_call:
+                    summary["stop_finish_tool_calls"] += 1
+                elif actual_stop:
+                    summary["stop_finish_stop"] += 1
+                elif finish_reason:
+                    summary["tool_calls_finish_others"] += 1
+                    summary["tool_calls_finish_others_detail"].setdefault(finish_reason, 0)
+                    summary["tool_calls_finish_others_detail"][finish_reason] += 1
+            else:
+                # expected_tool_call is None (legacy data without label)
+                if actual_tool_call:
+                    summary["tool_calls_finish_tool_calls"] += 1
+                    if tool_calls_valid:
+                        summary["tool_calls_successful_count"] += 1
+                    else:
+                        summary["tool_calls_schema_validation_error_count"] += 1
+                    count_key = str(tool_calls_count)
+                    summary["tool_calls_count_distribution"].setdefault(count_key, 0)
+                    summary["tool_calls_count_distribution"][count_key] += 1
+                elif actual_stop:
+                    summary["tool_calls_finish_stop"] += 1
+                elif finish_reason:
+                    summary["tool_calls_finish_others"] += 1
+                    summary["tool_calls_finish_others_detail"].setdefault(finish_reason, 0)
+                    summary["tool_calls_finish_others_detail"][finish_reason] += 1
 
         return summary
 

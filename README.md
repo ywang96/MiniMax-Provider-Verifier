@@ -13,20 +13,17 @@ The primary metrics are:
 * **Query-Success-Rate:** Measures the probability that a provider can eventually return a valid response successfully when allowed up to `max_retry=10` attempts.
   - `query_success_rate = successful_query_count / total_query_count`
 
-* **Finish-ToolCalls-Rate:** Measures the proportion of triggered tool-calls that successfully reach a completed tool-call result, regardless of argument correctness.
-  - `finish_tool_calls_rate = finish_tool_calls_count / total_query_count`
+* **ToolCalls-Match-Rate:** Measures how well the model's "whether to trigger tool-calls" behavior matches the expected labels. Each test case is annotated with `expected_tool_call` (whether a tool call is expected), and this metric calculates the proportion of cases where the actual result matches the expected result.
+  - `tool_calls_match_rate = (tool_calls_finish_tool_calls + stop_finish_stop) / success_count`
+  - Confusion Matrix Statistics:
+    - `tool_calls_finish_tool_calls`: expected tool_call, actual tool_call (TP)
+    - `tool_calls_finish_stop`: expected tool_call, actual stop (FN)
+    - `stop_finish_tool_calls`: expected stop, actual tool_call (FP)
+    - `stop_finish_stop`: expected stop, actual stop (TN)
 
-* **ToolCalls-Trigger Similarity:** Measures the similarity of "whether to trigger tool-calls" between a provider and a official reference, using the F1 score (harmonic mean of precision and recall). This mirrors the methodology popularized in K2 Vendor Verifier and is used to detect deployment correctness at the decision level. See reference: [MoonshotAI/K2-Vendor-Verifier](https://github.com/MoonshotAI/K2-Vendor-Verifier).
+* **ToolCalls-Schema-Accuracy:** Measures the correctness rate of tool-call payloads (e.g., function name and arguments meeting the expected schema) conditional on tool-call being triggered.
+  - `schema_accuracy = tool_calls_successful_count / tool_calls_finish_tool_calls`
 
-  - Define `TP = count(provider triggers AND official reference triggers)`, `FP = count(provider triggers AND official reference does not)`, `FN = count(provider does not AND official reference triggers)`
-
-  - `Precision = TP / (TP + FP)`, `Recall = TP / (TP + FN)`
-
-  - `F1 = 2 · Precision · Recall / (Precision + Recall)`
-
-
-* **ToolCalls-Accuracy:** Measures the correctness rate of tool-call payloads (e.g., function name and arguments meeting the expected schema) conditional on tool-call being triggered.
-  - `accuracy = tool_calls_successful_count / tool_calls_finish_tool_calls`
 
 * **Response-Success-Rate Not Only Reasoning:** Detects a specific error pattern where the model outputs only Chain-of-Thought reasoning without providing valid content or the required tool calls. The presence of this pattern strongly indicates a deployment issue.
   - `Response-success-rate = response_not_only_reasoning_count / only_reasoning_checked_count`
@@ -130,6 +127,43 @@ python verify.py sample.jsonl \
 - `--retries` (optional, int, default=3): Max automatic retries per request.
 - `--extra-body` (optional, JSON string): Extra fields to merge into each request's payload (e.g., decoding parameters).
 - `--incremental` (flag): Only rerun previously failed or new requests, merging with existing output; recomputes the summary.
+
+### Batch Testing (Recommended: pass@10)
+
+For comprehensive evaluation with statistical significance, we recommend using the batch verification script which runs multiple iterations and aggregates metrics:
+
+```bash
+bash run_batch_sequential.sh \
+  --module 'provider-name' \
+  --url 'https://api.example.com/v1/' \
+  --model 'model-name' \
+  --api-key 'your-api-key' \
+  --max-workers 10 \
+  --mm-model 'MiniMax-M2.5'
+```
+
+**Parameters:**
+
+- `--module`: Provider/module name (required)
+- `--url`: API endpoint URL (required)
+- `--model`: Model name (required)
+- `--api-key`: API key (required)
+- `--max-workers`: Concurrent request count (default: 10)
+- `--stream`: Enable streaming mode
+- `--debug`: Debug mode, only run first 10 cases
+- `--extra-body`: Extra request body parameters (JSON format)
+- `--mm-model`: MiniMax baseline model name for comparison (default: MiniMax-M2.5)
+
+The script will:
+1. Execute 10 verification loops (pass@10)
+2. Calculate aggregated metrics across all loops
+3. Compare results with the baseline model
+4. Generate detailed metrics reports in `output-dir/batch_<timestamp>/`
+
+**Output:**
+- `metrics_report.json`: Aggregated metrics from all loops
+- `comparison_report.json`: Comparison with baseline model
+- Individual loop results in `loop_01/`, `loop_02/`, etc.
 
 ## Roadmap
 
