@@ -357,7 +357,7 @@ fi
 # Compare with Baseline
 # ========================================
 
-BASELINE_DIR="$PROJECT_ROOT/$MM_MODEL"
+BASELINE_DIR="$PROJECT_ROOT/output-dir/$MM_MODEL"
 COMPARISON_REPORT="$OUTPUT_BASE_DIR/comparison_report.json"
 
 if [ -d "$BASELINE_DIR" ]; then

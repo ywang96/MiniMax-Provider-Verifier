@@ -35,6 +35,12 @@ The primary metrics are:
 
 The evaluation results below are computed using our initial release of test prompts, each executed 10 times per provider, with all metrics reported as the mean over the 10-run distribution. As a baseline, `minimax` represents the performance of our [official MiniMax Open Platform](https://platform.minimax.io/ ) deployment, providing a reference point for interpreting other providers' results.
 
+### MiniMax-M2.5/M2.7 Model – March 2026 Data (After Metrics Revision)
+
+| Metric | Query-Success-Rate | ToolCalls-Match-Rate | ToolCalls-Accuracy | Response-Success-Rate | Language-Following-Success-Rate |
+|--------|--------------------|-----------------------------|--------------------|--------------------------------------------|----------------------------------|
+| MiniMax-M2.5 | 100% | 97.30% | 98.55% | 100% | 85% |
+| MiniMax-M2.7 | 100% | 97.50% | 97.34% | 100% | 80% |
 
 ### MiniMax-M2.5 Model – Feb 2026 Data
 
