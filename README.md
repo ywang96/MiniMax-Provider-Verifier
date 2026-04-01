@@ -39,8 +39,8 @@ The evaluation results below are computed using our initial release of test prom
 
 | Metric | Query-Success-Rate | ToolCalls-Match-Rate | ToolCalls-Accuracy | Response-Success-Rate | Language-Following-Success-Rate |
 |--------|--------------------|-----------------------------|--------------------|--------------------------------------------|----------------------------------|
-| MiniMax-M2.5 | 100% | 99.19% | 96.31% | 100% | 80% |
-| MiniMax-M2.7 | 100% | 99.29% | 96.66% | 100% | 80% |
+| MiniMax-M2.5 | 100% | 99.29% | 95.59% | 100% | 80% |
+| MiniMax-M2.7 | 100% | 99.29% | 96.55% | 100% | 90% |
 
 ### MiniMax-M2.5 Model – Feb 2026 Data
 

@@ -1,5 +1,5 @@
 {
-  "test_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_200428/loop_04/MiniMax-M2.7/test_data.jsonl",
+  "test_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_04/MiniMax-M2.7/test_data.jsonl",
   "total_providers": 1,
   "successful_providers": 1,
   "failed_providers": 0,
@@ -24,12 +24,12 @@
         "expected_tool_call_total_count": 99,
         "tool_calls_schema_validation_error_count": 2,
         "tool_calls_successful_count": 82,
-        "tool_calls_total_count": 166,
+        "tool_calls_total_count": 156,
         "tool_calls_count_distribution": {
-          "2": 14,
-          "1": 45,
-          "3": 15,
-          "4": 6,
+          "1": 52,
+          "2": 9,
+          "3": 14,
+          "4": 5,
           "5": 3,
           "9": 1
         },
@@ -39,10 +39,10 @@
         "success_rate": 1.0,
         "tool_calls_accuracy": 0.9802
       },
-      "output_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_200428/loop_04/MiniMax-M2.7/MiniMax-M2.7_results.jsonl",
-      "summary_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_200428/loop_04/MiniMax-M2.7/MiniMax-M2.7_summary.json",
-      "completed_at": "2026-04-01T20:19:02.951262"
+      "output_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_04/MiniMax-M2.7/MiniMax-M2.7_results.jsonl",
+      "summary_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_04/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "completed_at": "2026-04-01T22:41:59.421564"
     }
   ],
-  "generated_at": "2026-04-01T20:19:02.984000"
+  "generated_at": "2026-04-01T22:41:59.429992"
 }

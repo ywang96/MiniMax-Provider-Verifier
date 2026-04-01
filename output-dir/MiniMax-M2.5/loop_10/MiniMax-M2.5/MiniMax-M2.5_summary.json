@@ -3,22 +3,22 @@
     "success_count": 101,
     "failure_count": 0,
     "all_count": 101,
-    "tool_calls_finish_tool_calls": 84,
-    "tool_calls_finish_stop": 0,
+    "tool_calls_finish_tool_calls": 83,
+    "tool_calls_finish_stop": 1,
     "stop_finish_tool_calls": 0,
     "stop_finish_stop": 15,
     "tool_calls_finish_others": 0,
     "tool_calls_finish_others_detail": {},
     "expected_tool_call_total_count": 99,
-    "tool_calls_schema_validation_error_count": 4,
+    "tool_calls_schema_validation_error_count": 3,
     "tool_calls_successful_count": 80,
-    "tool_calls_total_count": 165,
+    "tool_calls_total_count": 159,
     "tool_calls_count_distribution": {
-        "1": 48,
-        "2": 10,
-        "3": 15,
-        "4": 7,
-        "5": 3,
+        "1": 44,
+        "2": 17,
+        "3": 14,
+        "4": 5,
+        "5": 2,
         "9": 1
     },
     "language_following_checked_count": 2,
@@ -28,5 +28,5 @@
     "error_only_reasoning_count": 0,
     "error_only_reasoning_rate": 0.0,
     "success_rate": 1.0,
-    "tool_calls_accuracy": 0.9802
+    "tool_calls_accuracy": 0.9703
 }
