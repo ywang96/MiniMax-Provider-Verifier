@@ -4,6 +4,62 @@ from jsonschema import validate, ValidationError
 
 from validator import BaseValidator
 
+# Common command prefixes that indicate a merged argument when followed by a space
+_COMMON_COMMANDS = [
+    "ls ", "cat ", "git ", "npm ", "npx ", "cd ", "cp ", "mv ", "rm ",
+    "mkdir ", "chmod ", "chown ", "find ", "grep ", "curl ", "wget ",
+    "pip ",
+]
+
+
+def _is_shell_c_invocation(cmd: list) -> bool:
+    """Check if cmd is a shell -c invocation (e.g. bash -lc '...', sh -c '...')."""
+    if not cmd or len(cmd) < 3:
+        return False
+    shell = cmd[0]
+    if shell not in ("bash", "sh", "zsh", "/bin/bash", "/bin/sh", "/bin/zsh",
+                     "/usr/bin/bash", "/usr/bin/sh", "/usr/bin/zsh"):
+        return False
+    # Match patterns: ["bash", "-c", "..."], ["bash", "-lc", "..."],
+    # ["bash", "-l", "-c", "..."], ["bash", "--login", "-c", "..."]
+    for i, arg in enumerate(cmd[1:], start=1):
+        if arg in ("-c", "-lc"):
+            return True
+        if arg in ("-l", "--login"):
+            continue
+        break
+    return False
+
+
+def is_valid_array_command(cmd) -> bool:
+    """Validate that an array command has properly separated arguments.
+
+    Returns False when the model merges multiple arguments into a single
+    string (e.g. ["ls -la /workspace"]) which would fail at execvp() time.
+    Shell -c invocations are exempted because the script string after -c
+    is expected to contain spaces.
+    """
+    if not isinstance(cmd, list) or len(cmd) == 0:
+        return False
+
+    if _is_shell_c_invocation(cmd):
+        return True
+
+    for elem in cmd:
+        if not isinstance(elem, str):
+            return False
+        if " " in elem:
+            # Check if it starts with a common command prefix
+            for prefix in _COMMON_COMMANDS:
+                if elem.startswith(prefix):
+                    return False
+
+    # Single-element array with spaces is suspicious
+    if len(cmd) == 1 and " " in cmd[0]:
+        return False
+
+    return True
+
 
 class ToolCallsValidator(BaseValidator):
     """Validator for tool calls schema validation."""
@@ -140,6 +196,17 @@ class ToolCallsValidator(BaseValidator):
             if isinstance(args, str):
                 args = json.loads(args)
             validate(instance=args, schema=schema)
+
+            # Additional: validate array command format
+            for param_name, param_schema in schema.get("properties", {}).items():
+                if (param_name == "command"
+                        and param_schema.get("type") == "array"
+                        and param_schema.get("items", {}).get("type") == "string"):
+                    cmd_value = args.get(param_name)
+                    if cmd_value is not None and not is_valid_array_command(cmd_value):
+                        print(f"Array command format validation failed for {tool_name}.{param_name}: {cmd_value}")
+                        return False
+
             return True
         except (json.JSONDecodeError, ValidationError) as e:
             print(f"Schema validation failed: {e}")
