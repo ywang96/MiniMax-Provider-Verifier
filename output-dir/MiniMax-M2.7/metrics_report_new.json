@@ -11,7 +11,7 @@
     },
     "results": [
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_01/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+            "file": "output-dir/MiniMax-M2.7/loop_01/MiniMax-M2.7/MiniMax-M2.7_summary.json",
             "model": "minimax-m2.7",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
@@ -22,7 +22,7 @@
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_02/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+            "file": "output-dir/MiniMax-M2.7/loop_02/MiniMax-M2.7/MiniMax-M2.7_summary.json",
             "model": "minimax-m2.7",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
@@ -33,7 +33,7 @@
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_03/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+            "file": "output-dir/MiniMax-M2.7/loop_03/MiniMax-M2.7/MiniMax-M2.7_summary.json",
             "model": "minimax-m2.7",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
@@ -44,7 +44,7 @@
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_04/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+            "file": "output-dir/MiniMax-M2.7/loop_04/MiniMax-M2.7/MiniMax-M2.7_summary.json",
             "model": "minimax-m2.7",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
@@ -55,7 +55,7 @@
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_05/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+            "file": "output-dir/MiniMax-M2.7/loop_05/MiniMax-M2.7/MiniMax-M2.7_summary.json",
             "model": "minimax-m2.7",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
@@ -66,7 +66,7 @@
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_06/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+            "file": "output-dir/MiniMax-M2.7/loop_06/MiniMax-M2.7/MiniMax-M2.7_summary.json",
             "model": "minimax-m2.7",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
@@ -77,7 +77,7 @@
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_07/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+            "file": "output-dir/MiniMax-M2.7/loop_07/MiniMax-M2.7/MiniMax-M2.7_summary.json",
             "model": "minimax-m2.7",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
@@ -88,7 +88,7 @@
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_08/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+            "file": "output-dir/MiniMax-M2.7/loop_08/MiniMax-M2.7/MiniMax-M2.7_summary.json",
             "model": "minimax-m2.7",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
@@ -99,7 +99,7 @@
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_09/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+            "file": "output-dir/MiniMax-M2.7/loop_09/MiniMax-M2.7/MiniMax-M2.7_summary.json",
             "model": "minimax-m2.7",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
@@ -110,7 +110,7 @@
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_10/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+            "file": "output-dir/MiniMax-M2.7/loop_10/MiniMax-M2.7/MiniMax-M2.7_summary.json",
             "model": "minimax-m2.7",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,

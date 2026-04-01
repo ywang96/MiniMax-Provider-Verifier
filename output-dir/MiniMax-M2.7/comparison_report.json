@@ -1,0 +1,338 @@
+{
+  "provider": "MiniMax-M2.7",
+  "baseline_dir": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7",
+  "result_dir": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631",
+  "total_comparisons": 10,
+  "successful_comparisons": 10,
+  "generated_at": "2026-04-01T23:01:25.448921",
+  "average_metrics": {
+    "Query-Success-Rate": 1.0,
+    "ToolCalls-Match-Rate": 0.9929292929292929,
+    "ToolCalls-Trigger-Similarity-F1": 0.9923628932011666,
+    "ToolCalls-Accuracy": 0.9654761904761905,
+    "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+    "Language-Following-Success-Rate": 0.9
+  },
+  "comparisons": [
+    {
+      "result_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_01/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "baseline_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7/loop_01/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "model": "minimax-m2.7",
+      "baseline_model": "minimax-m2.7",
+      "metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.98989898989899,
+        "ToolCalls-Accuracy": 0.9761904761904762,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 0.5,
+        "ToolCalls-Trigger-Similarity-F1": 1.0
+      },
+      "baseline_metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.98989898989899,
+        "ToolCalls-Accuracy": 0.9880952380952381,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0
+      },
+      "toolcalls_trigger_similarity": {
+        "f1": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "tp": 85,
+        "fp": 0,
+        "fn": 0,
+        "tn": 16,
+        "samples_used": 101
+      },
+      "status": "success"
+    },
+    {
+      "result_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_02/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "baseline_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7/loop_02/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "model": "minimax-m2.7",
+      "baseline_model": "minimax-m2.7",
+      "metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.98989898989899,
+        "ToolCalls-Accuracy": 0.9523809523809523,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0,
+        "ToolCalls-Trigger-Similarity-F1": 1.0
+      },
+      "baseline_metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.98989898989899,
+        "ToolCalls-Accuracy": 0.9642857142857143,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 0.5
+      },
+      "toolcalls_trigger_similarity": {
+        "f1": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "tp": 85,
+        "fp": 0,
+        "fn": 0,
+        "tn": 16,
+        "samples_used": 101
+      },
+      "status": "success"
+    },
+    {
+      "result_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_03/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "baseline_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7/loop_03/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "model": "minimax-m2.7",
+      "baseline_model": "minimax-m2.7",
+      "metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.98989898989899,
+        "ToolCalls-Accuracy": 0.9523809523809523,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0,
+        "ToolCalls-Trigger-Similarity-F1": 0.9883720930232558
+      },
+      "baseline_metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.9696969696969697,
+        "ToolCalls-Accuracy": 0.9523809523809523,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0
+      },
+      "toolcalls_trigger_similarity": {
+        "f1": 0.9883720930232558,
+        "precision": 1.0,
+        "recall": 0.9770114942528736,
+        "tp": 85,
+        "fp": 0,
+        "fn": 2,
+        "tn": 14,
+        "samples_used": 101
+      },
+      "status": "success"
+    },
+    {
+      "result_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_04/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "baseline_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7/loop_04/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "model": "minimax-m2.7",
+      "baseline_model": "minimax-m2.7",
+      "metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 1.0,
+        "ToolCalls-Accuracy": 0.9761904761904762,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0,
+        "ToolCalls-Trigger-Similarity-F1": 0.9940119760479043
+      },
+      "baseline_metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.98989898989899,
+        "ToolCalls-Accuracy": 0.963855421686747,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0
+      },
+      "toolcalls_trigger_similarity": {
+        "f1": 0.9940119760479043,
+        "precision": 0.9880952380952381,
+        "recall": 1.0,
+        "tp": 83,
+        "fp": 1,
+        "fn": 0,
+        "tn": 17,
+        "samples_used": 101
+      },
+      "status": "success"
+    },
+    {
+      "result_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_05/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "baseline_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7/loop_05/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "model": "minimax-m2.7",
+      "baseline_model": "minimax-m2.7",
+      "metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 1.0,
+        "ToolCalls-Accuracy": 0.9761904761904762,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 0.5,
+        "ToolCalls-Trigger-Similarity-F1": 0.988235294117647
+      },
+      "baseline_metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.9797979797979798,
+        "ToolCalls-Accuracy": 0.9404761904761905,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 0.0
+      },
+      "toolcalls_trigger_similarity": {
+        "f1": 0.988235294117647,
+        "precision": 1.0,
+        "recall": 0.9767441860465116,
+        "tp": 84,
+        "fp": 0,
+        "fn": 2,
+        "tn": 15,
+        "samples_used": 101
+      },
+      "status": "success"
+    },
+    {
+      "result_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_06/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "baseline_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7/loop_06/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "model": "minimax-m2.7",
+      "baseline_model": "minimax-m2.7",
+      "metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.98989898989899,
+        "ToolCalls-Accuracy": 0.9523809523809523,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0,
+        "ToolCalls-Trigger-Similarity-F1": 0.9824561403508771
+      },
+      "baseline_metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.9797979797979798,
+        "ToolCalls-Accuracy": 0.9642857142857143,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0
+      },
+      "toolcalls_trigger_similarity": {
+        "f1": 0.9824561403508771,
+        "precision": 0.9882352941176471,
+        "recall": 0.9767441860465116,
+        "tp": 84,
+        "fp": 1,
+        "fn": 2,
+        "tn": 14,
+        "samples_used": 101
+      },
+      "status": "success"
+    },
+    {
+      "result_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_07/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "baseline_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7/loop_07/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "model": "minimax-m2.7",
+      "baseline_model": "minimax-m2.7",
+      "metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.98989898989899,
+        "ToolCalls-Accuracy": 0.9642857142857143,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0,
+        "ToolCalls-Trigger-Similarity-F1": 0.9882352941176471
+      },
+      "baseline_metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.98989898989899,
+        "ToolCalls-Accuracy": 0.9404761904761905,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 0.5
+      },
+      "toolcalls_trigger_similarity": {
+        "f1": 0.9882352941176471,
+        "precision": 0.9882352941176471,
+        "recall": 0.9882352941176471,
+        "tp": 84,
+        "fp": 1,
+        "fn": 1,
+        "tn": 15,
+        "samples_used": 101
+      },
+      "status": "success"
+    },
+    {
+      "result_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_08/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "baseline_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7/loop_08/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "model": "minimax-m2.7",
+      "baseline_model": "minimax-m2.7",
+      "metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 1.0,
+        "ToolCalls-Accuracy": 0.9642857142857143,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0,
+        "ToolCalls-Trigger-Similarity-F1": 1.0
+      },
+      "baseline_metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 1.0,
+        "ToolCalls-Accuracy": 0.9761904761904762,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0
+      },
+      "toolcalls_trigger_similarity": {
+        "f1": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "tp": 84,
+        "fp": 0,
+        "fn": 0,
+        "tn": 17,
+        "samples_used": 101
+      },
+      "status": "success"
+    },
+    {
+      "result_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_09/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "baseline_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7/loop_09/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "model": "minimax-m2.7",
+      "baseline_model": "minimax-m2.7",
+      "metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 1.0,
+        "ToolCalls-Accuracy": 0.9642857142857143,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0,
+        "ToolCalls-Trigger-Similarity-F1": 0.9940828402366864
+      },
+      "baseline_metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.98989898989899,
+        "ToolCalls-Accuracy": 0.9761904761904762,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 0.5
+      },
+      "toolcalls_trigger_similarity": {
+        "f1": 0.9940828402366864,
+        "precision": 1.0,
+        "recall": 0.9882352941176471,
+        "tp": 84,
+        "fp": 0,
+        "fn": 1,
+        "tn": 16,
+        "samples_used": 101
+      },
+      "status": "success"
+    },
+    {
+      "result_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7_retry_20260401_222631/loop_10/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "baseline_file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.7/loop_10/MiniMax-M2.7/MiniMax-M2.7_summary.json",
+      "model": "minimax-m2.7",
+      "baseline_model": "minimax-m2.7",
+      "metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 0.9797979797979798,
+        "ToolCalls-Accuracy": 0.9761904761904762,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0,
+        "ToolCalls-Trigger-Similarity-F1": 0.988235294117647
+      },
+      "baseline_metrics": {
+        "Query-Success-Rate": 1.0,
+        "ToolCalls-Match-Rate": 1.0,
+        "ToolCalls-Accuracy": 0.9523809523809523,
+        "Response-Success-Rate-Not-Only-Reasoning": 1.0,
+        "Language-Following-Success-Rate": 1.0
+      },
+      "toolcalls_trigger_similarity": {
+        "f1": 0.988235294117647,
+        "precision": 0.9767441860465116,
+        "recall": 1.0,
+        "tp": 84,
+        "fp": 2,
+        "fn": 0,
+        "tn": 15,
+        "samples_used": 101
+      },
+      "status": "success"
+    }
+  ]
+}
