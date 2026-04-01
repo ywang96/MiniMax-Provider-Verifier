@@ -1,0 +1,32 @@
+{
+    "model": "minimax-m2.7",
+    "success_count": 101,
+    "failure_count": 0,
+    "all_count": 101,
+    "language_following_checked_count": 2,
+    "language_following_valid_count": 2,
+    "language_following_invalid_count": 0,
+    "tool_calls_finish_tool_calls": 84,
+    "tool_calls_finish_stop": 0,
+    "stop_finish_tool_calls": 0,
+    "stop_finish_stop": 15,
+    "tool_calls_finish_others": 0,
+    "tool_calls_finish_others_detail": {},
+    "expected_tool_call_total_count": 99,
+    "tool_calls_schema_validation_error_count": 2,
+    "tool_calls_successful_count": 82,
+    "tool_calls_total_count": 166,
+    "tool_calls_count_distribution": {
+        "2": 14,
+        "1": 45,
+        "3": 15,
+        "4": 6,
+        "5": 3,
+        "9": 1
+    },
+    "error_only_reasoning_checked_count": 101,
+    "error_only_reasoning_count": 0,
+    "error_only_reasoning_rate": 0.0,
+    "success_rate": 1.0,
+    "tool_calls_accuracy": 0.9802
+}
