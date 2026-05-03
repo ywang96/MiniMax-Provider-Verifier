@@ -92,12 +92,12 @@ def calculate_metrics_from_summary(data: Dict) -> Dict:
     metrics['ToolCalls-Match-Rate'] = (tool_calls_finish_tool_calls + stop_finish_stop) / expected_tool_call_total_count if expected_tool_call_total_count > 0 else 0
     
     tool_calls_successful_count = data.get('tool_calls_successful_count', 0)
-    metrics['ToolCalls-Accuracy'] = tool_calls_successful_count / tool_calls_finish_tool_calls if tool_calls_finish_tool_calls > 0 else 0
+    metrics['ToolCalls-Schema-Accuracy'] = tool_calls_successful_count / tool_calls_finish_tool_calls if tool_calls_finish_tool_calls > 0 else 0
     
     error_only_reasoning_count = data.get('error_only_reasoning_count', 0)
     error_only_reasoning_checked_count = data.get('error_only_reasoning_checked_count', 0)
-    metrics['Response-Success-Rate-Not-Only-Reasoning'] = (
-        (error_only_reasoning_checked_count - error_only_reasoning_count) / error_only_reasoning_checked_count 
+    metrics['Error-Only-Reasoning-Rate'] = (
+        error_only_reasoning_count / error_only_reasoning_checked_count
         if error_only_reasoning_checked_count > 0 else 0
     )
     
@@ -107,7 +107,14 @@ def calculate_metrics_from_summary(data: Dict) -> Dict:
         language_following_valid_count / language_following_checked_count 
         if language_following_checked_count > 0 else 0
     )
-    
+
+    scenario_check_valid_count = data.get('scenario_check_valid_count', 0)
+    scenario_check_checked_count = data.get('scenario_check_checked_count', 0)
+    metrics['Scenario-Check-Pass-Rate'] = (
+        scenario_check_valid_count / scenario_check_checked_count
+        if scenario_check_checked_count > 0 else None
+    )
+
     # Token Usage
     token_usage = data.get('token_usage', {})
     if token_usage:
@@ -258,14 +265,14 @@ def compare_single_loop(
                     'tn': f1_metrics['tn'],
                     'samples_used': min_len
                 }
-                result['metrics']['ToolCalls-Trigger-Similarity-F1'] = f1_metrics['f1']
+                result['metrics']['ToolCalls-Trigger-Similarity'] = f1_metrics['f1']
             except Exception as e:
                 print(f"   ⚠️  Failed to calculate ToolCalls-Trigger-Similarity: {e}")
-                result['metrics']['ToolCalls-Trigger-Similarity-F1'] = None
+                result['metrics']['ToolCalls-Trigger-Similarity'] = None
         else:
-            result['metrics']['ToolCalls-Trigger-Similarity-F1'] = None
+            result['metrics']['ToolCalls-Trigger-Similarity'] = None
     else:
-        result['metrics']['ToolCalls-Trigger-Similarity-F1'] = None
+        result['metrics']['ToolCalls-Trigger-Similarity'] = None
         if not result_jsonl_path:
             print(f"   ⚠️  No results.jsonl in result directory, cannot calculate ToolCalls-Trigger-Similarity")
         if not baseline_jsonl_path:
@@ -285,10 +292,11 @@ def calculate_average_metrics(all_results: List[Dict]) -> Dict:
     metric_keys = [
         'Query-Success-Rate',
         'ToolCalls-Match-Rate',
-        'ToolCalls-Trigger-Similarity-F1',
-        'ToolCalls-Accuracy',
-        'Response-Success-Rate-Not-Only-Reasoning',
-        'Language-Following-Success-Rate'
+        'ToolCalls-Trigger-Similarity',
+        'ToolCalls-Schema-Accuracy',
+        'Error-Only-Reasoning-Rate',
+        'Language-Following-Success-Rate',
+        'Scenario-Check-Pass-Rate'
     ]
     
     avg_metrics = {}
@@ -343,54 +351,56 @@ def print_comparison_table(all_results: List[Dict], avg_metrics: Dict):
         print("❌ No successful comparison results")
         return
     
-    has_similarity = any(r['metrics'].get('ToolCalls-Trigger-Similarity-F1') is not None for r in successful_results)
+    has_similarity = any(r['metrics'].get('ToolCalls-Trigger-Similarity') is not None for r in successful_results)
     
     # Header
     if has_similarity:
-        print(f"\n{'Loop':<15} {'Model':<25} {'Q-Succ':<10} {'F-Tool':<10} {'TC-Sim-F1':<12} {'Tool-Acc':<10} {'R-Succ':<10} {'Lang-Succ':<10}")
-        print("-" * 120)
+        print(f"\n{'Loop':<15} {'Model':<25} {'Query-Success-Rate':<20} {'ToolCalls-Match-Rate':<22} {'ToolCalls-Trigger-Sim':<22} {'ToolCalls-Schema-Acc':<22} {'Error-Only-Reasoning':<22} {'Language-Following':<20}")
+        print("-" * 168)
     else:
-        print(f"\n{'Loop':<15} {'Model':<25} {'Q-Succ':<10} {'F-Tool':<10} {'Tool-Acc':<10} {'R-Succ':<10} {'Lang-Succ':<10}")
-        print("-" * 100)
-    
+        print(f"\n{'Loop':<15} {'Model':<25} {'Query-Success-Rate':<20} {'ToolCalls-Match-Rate':<22} {'ToolCalls-Schema-Acc':<22} {'Error-Only-Reasoning':<22} {'Language-Following':<20}")
+        print("-" * 146)
+
     for i, result in enumerate(successful_results, 1):
         loop_name = f"Loop {i}"
         model = result.get('model', 'Unknown')
         if len(model) > 23:
             model = model[:20] + "..."
-        
+
         metrics = result['metrics']
-        
+
         if has_similarity:
-            sim_f1 = metrics.get('ToolCalls-Trigger-Similarity-F1')
-            sim_str = f"{sim_f1*100:>10.2f}%" if sim_f1 is not None else "N/A".rjust(12)
+            sim_f1 = metrics.get('ToolCalls-Trigger-Similarity')
+            sim_str = f"{sim_f1*100:>20.2f}%" if sim_f1 is not None else "N/A".rjust(22)
             print(f"{loop_name:<15} {model:<25} "
-                  f"{metrics.get('Query-Success-Rate', 0)*100:>8.2f}% "
-                  f"{metrics.get('ToolCalls-Match-Rate', 0)*100:>8.2f}% "
+                  f"{metrics.get('Query-Success-Rate', 0)*100:>18.2f}% "
+                  f"{metrics.get('ToolCalls-Match-Rate', 0)*100:>20.2f}% "
                   f"{sim_str} "
-                  f"{metrics.get('ToolCalls-Accuracy', 0)*100:>8.2f}% "
-                  f"{metrics.get('Response-Success-Rate-Not-Only-Reasoning', 0)*100:>8.2f}% "
-                  f"{metrics.get('Language-Following-Success-Rate', 0)*100:>8.2f}%")
+                  f"{metrics.get('ToolCalls-Schema-Accuracy', 0)*100:>20.2f}% "
+                  f"{metrics.get('Error-Only-Reasoning-Rate', 0)*100:>20.2f}% "
+                  f"{metrics.get('Language-Following-Success-Rate', 0)*100:>18.2f}%")
         else:
             print(f"{loop_name:<15} {model:<25} "
-                  f"{metrics.get('Query-Success-Rate', 0)*100:>8.2f}% "
-                  f"{metrics.get('ToolCalls-Match-Rate', 0)*100:>8.2f}% "
-                  f"{metrics.get('ToolCalls-Accuracy', 0)*100:>8.2f}% "
-                  f"{metrics.get('Response-Success-Rate-Not-Only-Reasoning', 0)*100:>8.2f}% "
-                  f"{metrics.get('Language-Following-Success-Rate', 0)*100:>8.2f}%")
-    
-    print("=" * (120 if has_similarity else 100))
+                  f"{metrics.get('Query-Success-Rate', 0)*100:>18.2f}% "
+                  f"{metrics.get('ToolCalls-Match-Rate', 0)*100:>20.2f}% "
+                  f"{metrics.get('ToolCalls-Schema-Accuracy', 0)*100:>20.2f}% "
+                  f"{metrics.get('Error-Only-Reasoning-Rate', 0)*100:>20.2f}% "
+                  f"{metrics.get('Language-Following-Success-Rate', 0)*100:>18.2f}%")
+
+    print("=" * (168 if has_similarity else 146))
     
     # Print averages
     if avg_metrics:
         print(f"\n📈 Average Metrics ({len(successful_results)} comparisons):")
         print(f"  1. Query-Success-Rate: {avg_metrics.get('Query-Success-Rate', 0):.4f} ({avg_metrics.get('Query-Success-Rate', 0)*100:.2f}%)")
         print(f"  2. ToolCalls-Match-Rate: {avg_metrics.get('ToolCalls-Match-Rate', 0):.4f} ({avg_metrics.get('ToolCalls-Match-Rate', 0)*100:.2f}%)")
-        if 'ToolCalls-Trigger-Similarity-F1' in avg_metrics:
-            print(f"  3. ToolCalls-Trigger-Similarity-F1: {avg_metrics['ToolCalls-Trigger-Similarity-F1']:.4f} ({avg_metrics['ToolCalls-Trigger-Similarity-F1']*100:.2f}%)")
-        print(f"  4. ToolCalls-Accuracy: {avg_metrics.get('ToolCalls-Accuracy', 0):.4f} ({avg_metrics.get('ToolCalls-Accuracy', 0)*100:.2f}%)")
-        print(f"  5. Response-Success-Rate-Not-Only-Reasoning: {avg_metrics.get('Response-Success-Rate-Not-Only-Reasoning', 0):.4f} ({avg_metrics.get('Response-Success-Rate-Not-Only-Reasoning', 0)*100:.2f}%)")
+        if 'ToolCalls-Trigger-Similarity' in avg_metrics:
+            print(f"  3. ToolCalls-Trigger-Similarity: {avg_metrics['ToolCalls-Trigger-Similarity']:.4f} ({avg_metrics['ToolCalls-Trigger-Similarity']*100:.2f}%)")
+        print(f"  4. ToolCalls-Schema-Accuracy: {avg_metrics.get('ToolCalls-Schema-Accuracy', 0):.4f} ({avg_metrics.get('ToolCalls-Schema-Accuracy', 0)*100:.2f}%)")
+        print(f"  5. Error-Only-Reasoning-Rate: {avg_metrics.get('Error-Only-Reasoning-Rate', 0):.4f} ({avg_metrics.get('Error-Only-Reasoning-Rate', 0)*100:.2f}%)")
         print(f"  6. Language-Following-Success-Rate: {avg_metrics.get('Language-Following-Success-Rate', 0):.4f} ({avg_metrics.get('Language-Following-Success-Rate', 0)*100:.2f}%)")
+        if 'Scenario-Check-Pass-Rate' in avg_metrics:
+            print(f"  7. Scenario-Check-Pass-Rate: {avg_metrics['Scenario-Check-Pass-Rate']:.4f} ({avg_metrics['Scenario-Check-Pass-Rate']*100:.2f}%)")
         
         # Token Usage
         if 'Token-Usage' in avg_metrics:

@@ -13,10 +13,11 @@ from openai import AsyncOpenAI
 from tqdm.asyncio import tqdm_asyncio
 
 from validator import (
-    BaseValidator, 
-    ToolCallsValidator, 
+    BaseValidator,
+    ToolCallsValidator,
     RussianCharactersValidator,
     RepeatNGramValidator,
+    ScenarioCheckValidator,
 )
 
 
@@ -31,6 +32,7 @@ VALIDATOR_REGISTRY = {
     "tool_calls": ToolCallsValidator,
     "contains_russian_characters_unicode": RussianCharactersValidator,
     "repeat_n_gram": RepeatNGramValidator,
+    "scenario_check": ScenarioCheckValidator,
 }
 
 
@@ -126,11 +128,26 @@ class ValidatorRunner:
             for message in req["messages"]:
                 if message.get("role") == "_input":
                     message["role"] = "system"
+                # Convert reasoning/reasoning_detail/reason to reasoning_content
+                if "reasoning_detail" in message or "reasoning" in message or "reason" in message:
+                    reasoning_detail = message.pop("reasoning_detail", None)
+                    reasoning_text = message.pop("reasoning", None)
+                    reason_text = message.pop("reason", None)
+                    # Build reasoning_content from reasoning_detail if available
+                    if reasoning_detail and isinstance(reasoning_detail, list):
+                        parts = [item.get("text", "") for item in reasoning_detail if item.get("text")]
+                        if parts:
+                            message["reasoning_content"] = "\n".join(parts)
+                    elif reasoning_text:
+                        message["reasoning_content"] = reasoning_text
+                    elif reason_text:
+                        message["reasoning_content"] = reason_text
         if self.model:
             req["model"] = self.model
         # Remove custom fields, do not pass to API
         req.pop("check_type", None)
         req.pop("expected_tool_call", None)
+        req.pop("scenario_check", None)
         return req
 
     def read_jsonl(self, file_path: str) -> list[dict]:
@@ -418,6 +435,8 @@ class ValidatorRunner:
                 used_validators.add("contains_russian_characters_unicode")
             if "error_repeating_checked" in r:
                 used_validators.add("repeat_n_gram")
+            if "scenario_check_checked" in r:
+                used_validators.add("scenario_check")
         
         # Compute summary for each used validator
         # Compute summary for each used validator
@@ -457,11 +476,12 @@ class ValidatorRunner:
         else:
             summary["success_rate"] = 0.0
         
-        # Compute tool calls accuracy: (matched / success_count)
+        # Compute tool calls match rate: (matched / expected_tool_call_total_count)
         # matched = tool_calls_finish_tool_calls (TP) + stop_finish_stop (TN)
-        if summary["success_count"] > 0 and "tool_calls_finish_tool_calls" in summary:
+        if "tool_calls_finish_tool_calls" in summary:
             matched = summary.get("tool_calls_finish_tool_calls", 0) + summary.get("stop_finish_stop", 0)
-            summary["tool_calls_accuracy"] = round(matched / summary["success_count"], 4)
+            denominator = summary.get("expected_tool_call_total_count") or summary["success_count"]
+            summary["tool_calls_match_rate"] = round(matched / denominator, 4) if denominator > 0 else 0.0
         
         self.summary = summary
 

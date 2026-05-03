@@ -14,7 +14,7 @@ The primary metrics are:
   - `query_success_rate = successful_query_count / total_query_count`
 
 * **ToolCalls-Match-Rate:** Measures how well the model's "whether to trigger tool-calls" behavior matches the expected labels. Each test case is annotated with `expected_tool_call` (whether a tool call is expected), and this metric calculates the proportion of cases where the actual result matches the expected result.
-  - `tool_calls_match_rate = (tool_calls_finish_tool_calls + stop_finish_stop) / success_count`
+  - `tool_calls_match_rate = (tool_calls_finish_tool_calls + stop_finish_stop) / expected_tool_call_total_count`
   - Confusion Matrix Statistics:
     - `tool_calls_finish_tool_calls`: expected tool_call, actual tool_call (TP)
     - `tool_calls_finish_stop`: expected tool_call, actual stop (FN)
@@ -24,23 +24,37 @@ The primary metrics are:
 * **ToolCalls-Schema-Accuracy:** Measures the correctness rate of tool-call payloads (e.g., function name and arguments meeting the expected schema) conditional on tool-call being triggered.
   - `schema_accuracy = tool_calls_successful_count / tool_calls_finish_tool_calls`
 
+* **ToolCalls-Trigger Similarity:** Measures the similarity between a third-party deployment's tool-call triggering behavior and the official MiniMax deployment, using the F1 score with the official results as the gold standard.
+  - `precision = TP / (TP + FP)`
+  - `recall = TP / (TP + FN)`
+  - `trigger_similarity = 2 * precision * recall / (precision + recall)`
 
-* **Response-Success-Rate Not Only Reasoning:** Detects a specific error pattern where the model outputs only Chain-of-Thought reasoning without providing valid content or the required tool calls. The presence of this pattern strongly indicates a deployment issue.
-  - `Response-success-rate = response_not_only_reasoning_count / only_reasoning_checked_count`
+* **Error-Only-Reasoning-Rate:** Detects a specific error pattern where the model outputs only Chain-of-Thought reasoning without providing valid content or the required tool calls. The presence of this pattern strongly indicates a deployment issue.
+  - `error_only_reasoning_rate = error_only_reasoning_count / error_only_reasoning_checked_count`
 
 * **Language-Following-Success-Rate:** Checks whether the model follows language requirements in minor language scenarios; this is sensitive to top-k and related decoding parameters.
-  - `language_following_success-rate = language_following_valid_count / language_following_checked_count`
+  - `language_following_success_rate = language_following_valid_count / language_following_checked_count`
+
+* **Scenario-Check-Pass-Rate:** Validates model behavior in scenario-specific checks, such as whether the model can correctly recall the original parameter order from tool definitions. This metric is sensitive to providers that reorder JSON object keys (e.g., alphabetical sorting of `parameters.properties`), which can degrade the model's schema comprehension.
+  - `scenario_check_pass_rate = scenario_check_valid_count / scenario_check_checked_count`
 
 ## Evaluation Results
 
 The evaluation results below are computed using our initial release of test prompts, each executed 10 times per provider, with all metrics reported as the mean over the 10-run distribution. As a baseline, `minimax` represents the performance of our [official MiniMax Open Platform](https://platform.minimax.io/ ) deployment, providing a reference point for interpreting other providers' results.
 
+### MiniMax-M2.5/M2.7 Model – May 2026 Data
+
+| Metric | Query-Success-Rate | ToolCalls-Match-Rate | ToolCalls-Schema-Accuracy | Error-Only-Reasoning-Rate | Language-Following-Success-Rate | Scenario-Check-Pass-Rate |
+|--------|--------------------|-----------------------------|--------------------|--------------------------------------------|----------------------------------|--------------------------|
+| MiniMax-M2.5 | 100% | 98.30% | 98.57% | 0% | 85% | 100% |
+| MiniMax-M2.7 | 100% | 98.80% | 99.76% | 0% | 75% | 100% |
+
 ### MiniMax-M2.5/M2.7 Model – April 2026 Data (After Metrics Revision)
 
-| Metric | Query-Success-Rate | ToolCalls-Match-Rate | ToolCalls-Accuracy | Response-Success-Rate | Language-Following-Success-Rate |
-|--------|--------------------|-----------------------------|--------------------|--------------------------------------------|----------------------------------|
-| MiniMax-M2.5 | 100% | 99.29% | 95.59% | 100% | 80% |
-| MiniMax-M2.7 | 100% | 99.29% | 96.55% | 100% | 90% |
+| Metric | Query-Success-Rate | ToolCalls-Match-Rate | ToolCalls-Schema-Accuracy | Error-Only-Reasoning-Rate | Language-Following-Success-Rate | Scenario-Check-Pass-Rate |
+|--------|--------------------|-----------------------------|--------------------|--------------------------------------------|----------------------------------|--------------------------|
+| MiniMax-M2.5 | 100% | 99.29% | 95.59% | 0% | 80% | - |
+| MiniMax-M2.7 | 100% | 98.50% | 99.64% | 0% | 90% | 90% |
 
 ### MiniMax-M2.5 Model – Feb 2026 Data
 
@@ -91,20 +105,23 @@ Based on the current evaluation set, we provide the following reference threshol
 * **Query-Success-Rate** (with **max_retry=10**):
 Should be **100%**, indicating the model can reliably produce a successful response within realistic retry budgets.
 
-* **Finish-ToolCalls-Rate**:
-Should be **≈80%**, based on repeated internal runs, the trigger rate consistently hovers around 80% with a fluctuation of approximately ±2.5%.
+* **ToolCalls-Match-Rate**:
+Should be **≈98%**, based on repeated internal runs, the match rate consistently hovers around 98% with a fluctuation of approximately ±1%.
 
 * **ToolCalls-Trigger Similarity**:
 Should be **≥98%**, we observed a minimum similarity of 98.2% after 10 repeated tests for stable providers. Thus, 98% serves as a reasonable lower bound.
 
-* **ToolCalls-Accuracy**:
+* **ToolCalls-Schema-Accuracy**:
 Should be **≥98%**, reflects standard adherence to formatting and schema requirements.
 
-* **Response-Success-Rate Not Only Reasoning**:
-Should be **100%**. Any presence of "reasoning-only" output (no final answer or tool-call) strongly signals deployment issues.
+* **Error-Only-Reasoning-Rate**:
+Should be **0%**. Any presence of "reasoning-only" output (no final answer or tool-call) strongly signals deployment issues.
 
 * **Language-Following-Success-Rate**:
 Should be **≥40%**, based on repeated internal evaluations, values below this threshold indicate potential decoding issues, particularly in minor language scenarios.
+
+* **Scenario-Check-Pass-Rate**:
+Should be **100%**. This metric checks whether the provider preserves the original JSON key order in tool definitions. Failures indicate the provider is reordering `parameters.properties` keys (e.g., alphabetical sorting), which can impair model performance on complex nested schemas.
 
 ## Get Started
 

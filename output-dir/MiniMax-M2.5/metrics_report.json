@@ -3,121 +3,132 @@
         "total_files": 10,
         "average_metrics": {
             "1. Query-Success-Rate": 1.0,
-            "2. ToolCalls-Match-Rate": 0.9929292929292929,
-            "4. ToolCalls-Accuracy": 0.9559093516924841,
-            "5. Response-Success-Rate-Not-Only-Reasoning": 1.0,
-            "6. Language-Following-Success-Rate": 0.8
+            "2. ToolCalls-Match-Rate": 0.983,
+            "4. ToolCalls-Schema-Accuracy": 0.9857142857142858,
+            "5. Error-Only-Reasoning-Rate": 0.0,
+            "6. Language-Following-Success-Rate": 0.85,
+            "7. Scenario-Check-Pass-Rate": 1.0
         }
     },
     "results": [
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.5_retry_20260401_214201/loop_01/MiniMax-M2.5/MiniMax-M2.5_summary.json",
+            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/batch_20260502_175302/loop_01/MiniMax-M2.5/MiniMax-M2.5_summary.json",
             "model": "minimax-m2.5",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
-                "2. ToolCalls-Match-Rate": 0.9797979797979798,
-                "4. ToolCalls-Accuracy": 0.9404761904761905,
-                "5. Response-Success-Rate-Not-Only-Reasoning": 1.0,
-                "6. Language-Following-Success-Rate": 1.0
+                "2. ToolCalls-Match-Rate": 0.99,
+                "4. ToolCalls-Schema-Accuracy": 1.0,
+                "5. Error-Only-Reasoning-Rate": 0.0,
+                "6. Language-Following-Success-Rate": 1.0,
+                "7. Scenario-Check-Pass-Rate": 1.0
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.5_retry_20260401_214201/loop_02/MiniMax-M2.5/MiniMax-M2.5_summary.json",
+            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/batch_20260502_175302/loop_02/MiniMax-M2.5/MiniMax-M2.5_summary.json",
             "model": "minimax-m2.5",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
-                "2. ToolCalls-Match-Rate": 1.0,
-                "4. ToolCalls-Accuracy": 0.9761904761904762,
-                "5. Response-Success-Rate-Not-Only-Reasoning": 1.0,
-                "6. Language-Following-Success-Rate": 1.0
+                "2. ToolCalls-Match-Rate": 0.99,
+                "4. ToolCalls-Schema-Accuracy": 0.9880952380952381,
+                "5. Error-Only-Reasoning-Rate": 0.0,
+                "6. Language-Following-Success-Rate": 0.5,
+                "7. Scenario-Check-Pass-Rate": 1.0
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.5_retry_20260401_214201/loop_03/MiniMax-M2.5/MiniMax-M2.5_summary.json",
+            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/batch_20260502_175302/loop_03/MiniMax-M2.5/MiniMax-M2.5_summary.json",
             "model": "minimax-m2.5",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
-                "2. ToolCalls-Match-Rate": 0.98989898989899,
-                "4. ToolCalls-Accuracy": 0.9642857142857143,
-                "5. Response-Success-Rate-Not-Only-Reasoning": 1.0,
-                "6. Language-Following-Success-Rate": 1.0
+                "2. ToolCalls-Match-Rate": 0.98,
+                "4. ToolCalls-Schema-Accuracy": 0.9761904761904762,
+                "5. Error-Only-Reasoning-Rate": 0.0,
+                "6. Language-Following-Success-Rate": 0.5,
+                "7. Scenario-Check-Pass-Rate": 1.0
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.5_retry_20260401_214201/loop_04/MiniMax-M2.5/MiniMax-M2.5_summary.json",
+            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/batch_20260502_175302/loop_04/MiniMax-M2.5/MiniMax-M2.5_summary.json",
             "model": "minimax-m2.5",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
-                "2. ToolCalls-Match-Rate": 0.98989898989899,
-                "4. ToolCalls-Accuracy": 0.9523809523809523,
-                "5. Response-Success-Rate-Not-Only-Reasoning": 1.0,
-                "6. Language-Following-Success-Rate": 1.0
+                "2. ToolCalls-Match-Rate": 0.99,
+                "4. ToolCalls-Schema-Accuracy": 0.9880952380952381,
+                "5. Error-Only-Reasoning-Rate": 0.0,
+                "6. Language-Following-Success-Rate": 1.0,
+                "7. Scenario-Check-Pass-Rate": 1.0
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.5_retry_20260401_214201/loop_05/MiniMax-M2.5/MiniMax-M2.5_summary.json",
+            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/batch_20260502_175302/loop_05/MiniMax-M2.5/MiniMax-M2.5_summary.json",
             "model": "minimax-m2.5",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
-                "2. ToolCalls-Match-Rate": 1.0,
-                "4. ToolCalls-Accuracy": 0.9285714285714286,
-                "5. Response-Success-Rate-Not-Only-Reasoning": 1.0,
-                "6. Language-Following-Success-Rate": 0.5
+                "2. ToolCalls-Match-Rate": 0.95,
+                "4. ToolCalls-Schema-Accuracy": 0.9880952380952381,
+                "5. Error-Only-Reasoning-Rate": 0.0,
+                "6. Language-Following-Success-Rate": 1.0,
+                "7. Scenario-Check-Pass-Rate": 1.0
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.5_retry_20260401_214201/loop_06/MiniMax-M2.5/MiniMax-M2.5_summary.json",
+            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/batch_20260502_175302/loop_06/MiniMax-M2.5/MiniMax-M2.5_summary.json",
             "model": "minimax-m2.5",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
-                "2. ToolCalls-Match-Rate": 1.0,
-                "4. ToolCalls-Accuracy": 0.9523809523809523,
-                "5. Response-Success-Rate-Not-Only-Reasoning": 1.0,
-                "6. Language-Following-Success-Rate": 0.5
+                "2. ToolCalls-Match-Rate": 0.98,
+                "4. ToolCalls-Schema-Accuracy": 0.9880952380952381,
+                "5. Error-Only-Reasoning-Rate": 0.0,
+                "6. Language-Following-Success-Rate": 1.0,
+                "7. Scenario-Check-Pass-Rate": 1.0
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.5_retry_20260401_214201/loop_07/MiniMax-M2.5/MiniMax-M2.5_summary.json",
+            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/batch_20260502_175302/loop_07/MiniMax-M2.5/MiniMax-M2.5_summary.json",
             "model": "minimax-m2.5",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
-                "2. ToolCalls-Match-Rate": 0.9797979797979798,
-                "4. ToolCalls-Accuracy": 0.9523809523809523,
-                "5. Response-Success-Rate-Not-Only-Reasoning": 1.0,
-                "6. Language-Following-Success-Rate": 0.5
+                "2. ToolCalls-Match-Rate": 0.98,
+                "4. ToolCalls-Schema-Accuracy": 0.9880952380952381,
+                "5. Error-Only-Reasoning-Rate": 0.0,
+                "6. Language-Following-Success-Rate": 1.0,
+                "7. Scenario-Check-Pass-Rate": 1.0
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.5_retry_20260401_214201/loop_08/MiniMax-M2.5/MiniMax-M2.5_summary.json",
+            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/batch_20260502_175302/loop_08/MiniMax-M2.5/MiniMax-M2.5_summary.json",
             "model": "minimax-m2.5",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
-                "2. ToolCalls-Match-Rate": 1.0,
-                "4. ToolCalls-Accuracy": 0.9642857142857143,
-                "5. Response-Success-Rate-Not-Only-Reasoning": 1.0,
-                "6. Language-Following-Success-Rate": 1.0
+                "2. ToolCalls-Match-Rate": 0.99,
+                "4. ToolCalls-Schema-Accuracy": 0.9761904761904762,
+                "5. Error-Only-Reasoning-Rate": 0.0,
+                "6. Language-Following-Success-Rate": 0.5,
+                "7. Scenario-Check-Pass-Rate": 1.0
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.5_retry_20260401_214201/loop_09/MiniMax-M2.5/MiniMax-M2.5_summary.json",
+            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/batch_20260502_175302/loop_09/MiniMax-M2.5/MiniMax-M2.5_summary.json",
             "model": "minimax-m2.5",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
-                "2. ToolCalls-Match-Rate": 1.0,
-                "4. ToolCalls-Accuracy": 0.9642857142857143,
-                "5. Response-Success-Rate-Not-Only-Reasoning": 1.0,
-                "6. Language-Following-Success-Rate": 1.0
+                "2. ToolCalls-Match-Rate": 0.99,
+                "4. ToolCalls-Schema-Accuracy": 0.9761904761904762,
+                "5. Error-Only-Reasoning-Rate": 0.0,
+                "6. Language-Following-Success-Rate": 1.0,
+                "7. Scenario-Check-Pass-Rate": 1.0
             }
         },
         {
-            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/MiniMax-M2.5_retry_20260401_214201/loop_10/MiniMax-M2.5/MiniMax-M2.5_summary.json",
+            "file": "/Users/minimax/GitHub/MiniMax-Provider-Verifier/output-dir/batch_20260502_175302/loop_10/MiniMax-M2.5/MiniMax-M2.5_summary.json",
             "model": "minimax-m2.5",
             "metrics": {
                 "1. Query-Success-Rate": 1.0,
-                "2. ToolCalls-Match-Rate": 0.98989898989899,
-                "4. ToolCalls-Accuracy": 0.963855421686747,
-                "5. Response-Success-Rate-Not-Only-Reasoning": 1.0,
-                "6. Language-Following-Success-Rate": 0.5
+                "2. ToolCalls-Match-Rate": 0.99,
+                "4. ToolCalls-Schema-Accuracy": 0.9880952380952381,
+                "5. Error-Only-Reasoning-Rate": 0.0,
+                "6. Language-Following-Success-Rate": 1.0,
+                "7. Scenario-Check-Pass-Rate": 1.0
             }
         }
     ]

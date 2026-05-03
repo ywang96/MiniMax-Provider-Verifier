@@ -14,7 +14,7 @@
   - `query_success_rate = successful_query_count / total_query_count`
 
 * **工具调用匹配率（ToolCalls-Match-Rate）：** 衡量模型在"是否触发工具调用"这一行为上与预期标签的匹配程度。每个测试用例都标注了 `expected_tool_call`（是否预期触发工具调用），该指标计算预期与实际结果相符的比例。
-  - `tool_calls_match_rate = (tool_calls_finish_tool_calls + stop_finish_stop) / success_count`
+  - `tool_calls_match_rate = (tool_calls_finish_tool_calls + stop_finish_stop) / expected_tool_call_total_count`
   - 四项限统计（混淆矩阵）：
     - `tool_calls_finish_tool_calls`: 预期 tool_call，实际 tool_call (TP)
     - `tool_calls_finish_stop`: 预期 tool_call，实际 stop (FN)
@@ -24,23 +24,37 @@
 * **工具调用参数准确率（ToolCalls-Schema-Accuracy）：** 在触发工具调用的前提下，生成的函数名和参数符合预期模式的比例。
   - `schema_accuracy = tool_calls_successful_count / tool_calls_finish_tool_calls`
 
+* **工具调用触发相似度（ToolCalls-Trigger Similarity）：** 以官方 MiniMax 部署结果为基准，用 F1 score 衡量第三方部署的工具调用触发行为与基准的相似度。
+  - `precision = TP / (TP + FP)`
+  - `recall = TP / (TP + FN)`
+  - `trigger_similarity = 2 * precision * recall / (precision + recall)`
 
-* **响应有效率（Response-Success-Rate Not Only Reasoning）：** 检测模型是否陷入“仅输出推理过程（Chain-of-Thought）但无有效内容或工具调用”的错误模式。此类模式通常意味着部署存在问题。
-  - `Response-success-rate = response_not_only_reasoning_count / only_reasoning_checked_count`
+* **推理异常率（Error-Only-Reasoning-Rate）：** 检测模型是否陷入”仅输出推理过程（Chain-of-Thought）但无有效内容或工具调用”的错误模式。此类模式通常意味着部署存在问题。
+  - `error_only_reasoning_rate = error_only_reasoning_count / error_only_reasoning_checked_count`
 
 * **语言遵循成功率（Language-Following-Success-Rate）：** 在小语种场景下，检查模型是否能正确遵循语言指令。该指标对 top-k 等解码参数非常敏感。
-  - `language_following_success-rate = language_following_valid_count / language_following_checked_count`
+  - `language_following_success_rate = language_following_valid_count / language_following_checked_count`
+
+* **特定场景检查通过率（Scenario-Check-Pass-Rate）：** 验证模型在特定场景下的行为正确性，例如模型能否正确复述工具定义中参数的原始顺序。该指标对供应商是否重排 JSON 对象键（如对 `parameters.properties` 进行字母序排序）非常敏感，此类重排可能影响模型对复杂嵌套 schema 的理解能力。
+  - `scenario_check_pass_rate = scenario_check_valid_count / scenario_check_checked_count`
 
 ## 评估结果
 
 基于我们发布的初始测试集，以下是各供应商的评估结果（每个供应商执行 10 次取平均值）。其中 `minimax` 代表[官方 MiniMax 开放平台](https://platform.minimaxi.com/)的部署表现，作为基准参考。
 
+### MiniMax-M2.5/M2.7 模型，26年5月数据
+
+| 指标 | 请求成功率 | 工具调用匹配率 | 工具调用参数准确率 | 推理异常率 | 语言遵循成功率 | 特定场景检查通过率 |
+|--------|--------------------|-----------------------------|--------------------|--------------------------------------------|----------------------------------|--------------------------|
+| MiniMax-M2.5 | 100% | 98.30% | 98.57% | 0% | 85% | 100% |
+| MiniMax-M2.7 | 100% | 98.80% | 99.76% | 0% | 75% | 100% |
+
 ### MiniMax-M2.5/M2.7 模型，26年4月数据（指标改版后）
 
-| 指标 | 请求成功率 | 工具调用匹配率 | 工具调用准确率 | 响应有效率 | 语言遵循成功率 |
-|--------|--------------------|-----------------------------|--------------------|--------------------------------------------|----------------------------------|
-| MiniMax-M2.5 | 100% | 99.29% | 95.59% | 100% | 80% |
-| MiniMax-M2.7 | 100% | 99.29% | 96.55% | 100% | 90% |
+| 指标 | 请求成功率 | 工具调用匹配率 | 工具调用参数准确率 | 推理异常率 | 语言遵循成功率 | 特定场景检查通过率 |
+|--------|--------------------|-----------------------------|--------------------|--------------------------------------------|----------------------------------|--------------------------|
+| MiniMax-M2.5 | 100% | 99.29% | 95.59% | 0% | 80% | - |
+| MiniMax-M2.7 | 100% | 98.50% | 99.64% | 0% | 90% | 90% |
 
 ### MiniMax-M2.5 模型，26年2月数据（指标改版前）
 
@@ -92,20 +106,23 @@
 * **请求成功率** (使用 **max_retry=10**):
 应为 **100%**，表明模型可以在合理的重试预算内稳定返回结果。
 
-* **完成工具调用率**:
-应 **≈80%**，基于当前评估集，在内部重复测试中，波动幅度通常在 ±2.5% 以内。
+* **工具调用匹配率**:
+应 **≈98%**，基于当前评估集，在内部重复测试中，波动幅度通常在 ±1% 以内。
 
 * **工具调用触发相似度**:
 应 **≥98%**，对官方渠道进行 10 次重复测试后观察到最小相似度为 98.2%。因此，98% 是一个合理的下限。
 
-* **工具调用准确率**:
+* **工具调用参数准确率**:
 应 **≥98%**，反映格式标准且符合模式的工具调用。
 
-* **响应有效率**:
-应为 **100%**，任何"仅推理"输出（无最终答案或工具调用）的出现都显著表明部署存在异常。
+* **推理异常率**:
+应为 **0%**，任何"仅推理"输出（无最终答案或工具调用）的出现都显著表明部署存在异常。
 
 * **语言遵循成功率**:
 应 **≥40%**，基于内部多次评估结果，低于此阈值表明潜在的解码问题，在小语种场景尤为明显。
+
+* **特定场景检查通过率**:
+应为 **100%**。该指标检查供应商是否保留了工具定义中 JSON 键的原始顺序。失败表明供应商对 `parameters.properties` 键进行了重排序（如字母序排列），这可能影响模型在复杂嵌套 schema 上的表现。
 
 ## 快速开始
 

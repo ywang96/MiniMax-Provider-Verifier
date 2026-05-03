@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-05-03
+
+### Added
+- **Scenario-Check-Pass-Rate**: New metric for special scenario validation, verifying model behavior in edge cases
+  - Reference threshold: should be **100%**
+  - Added to baseline metrics and README evaluation tables
+
+### Changed
+- Updated M2.5/M2.7 baseline metrics with May 2026 data (100 concurrency, 10 rounds)
+
 ## [1.2.0] - 2026-03-19
 
 ### Added
@@ -32,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **ToolCalls-Match-Rate redefined**: Changed from simple "proportion of triggered tool calls" to a match rate based on expected labels
-  - New formula: `tool_calls_accuracy = (tool_calls_finish_tool_calls + stop_finish_stop) / success_count`
+  - New formula: `tool_calls_match_rate = (tool_calls_finish_tool_calls + stop_finish_stop) / expected_tool_call_total_count`
   - i.e., proportion of cases where actual result matches expected result
 
 ### Added
