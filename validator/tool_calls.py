@@ -158,22 +158,8 @@ class ToolCallsValidator(BaseValidator):
                     summary["tool_calls_finish_others_detail"].setdefault(finish_reason, 0)
                     summary["tool_calls_finish_others_detail"][finish_reason] += 1
             else:
-                # expected_tool_call is None (legacy data without label)
-                if actual_tool_call:
-                    summary["tool_calls_finish_tool_calls"] += 1
-                    if tool_calls_valid:
-                        summary["tool_calls_successful_count"] += 1
-                    else:
-                        summary["tool_calls_schema_validation_error_count"] += 1
-                    count_key = str(tool_calls_count)
-                    summary["tool_calls_count_distribution"].setdefault(count_key, 0)
-                    summary["tool_calls_count_distribution"][count_key] += 1
-                elif actual_stop:
-                    summary["tool_calls_finish_stop"] += 1
-                elif finish_reason:
-                    summary["tool_calls_finish_others"] += 1
-                    summary["tool_calls_finish_others_detail"].setdefault(finish_reason, 0)
-                    summary["tool_calls_finish_others_detail"][finish_reason] += 1
+                # expected_tool_call is None — skip, not counted in confusion matrix
+                pass
 
         return summary
 

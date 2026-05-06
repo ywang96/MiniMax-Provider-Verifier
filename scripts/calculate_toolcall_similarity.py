@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Calculate tool call similarity metrics:
-1. ToolCall-Trigger Similarity (tool_call_f1)
-2. Multi-ToolCall-Trigger Similarity (based on Cosine similarity)
-3. ToolCall-Accuracy (tool call success rate)
+1. ToolCalls-Trigger Similarity (F1 Score)
+2. Multi-ToolCalls-Trigger Similarity (based on Cosine similarity)
+3. ToolCalls-Schema-Accuracy (tool call success rate)
 4. Validation Metrics (error_repeating, language_following)
-5. Error Only Reasoning (errors containing only reasoning)
+5. Error-Only-Reasoning-Rate (errors containing only reasoning)
 """
 
 import json
@@ -106,7 +106,7 @@ def get_finish_reason(result: Dict) -> str:
 
 def calculate_tool_call_f1(official_results: List[Dict], model_results: List[Dict]) -> Dict:
     """
-    Calculate ToolCall-Trigger Similarity (tool_call_f1)
+    Calculate ToolCalls-Trigger Similarity (F1 Score)
     
     Args:
         official_results: Gold standard results
@@ -216,9 +216,9 @@ def cosine_similarity(probs1: List[float], probs2: List[float]) -> float:
     return float(cos_sim)
 
 
-def calculate_toolcall_accuracy(summary: Dict) -> Dict:
+def calculate_toolcall_schema_accuracy(summary: Dict) -> Dict:
     """
-    Calculate ToolCall-Accuracy (tool call success rate)
+    Calculate ToolCalls-Schema-Accuracy
     
     Args:
         summary: Model's summary data
@@ -345,7 +345,7 @@ def calculate_validation_metrics(summary: Dict) -> Dict:
 def calculate_multi_toolcall_similarity(official_dist: Dict[str, int], 
                                        model_dist: Dict[str, int]) -> Dict:
     """
-    Calculate Multi-ToolCall-Trigger Similarity (based on Cosine similarity)
+    Calculate Multi-ToolCalls-Trigger Similarity (based on Cosine similarity)
     
     Args:
         official_dist: Gold standard's tool_calls_count_distribution
@@ -392,7 +392,7 @@ def print_results(model_name: str, f1_metrics: Dict, multi_metrics: Dict, accura
     print(f"{'='*70}")
     
     # 1. ToolCall-Trigger Similarity (tool_call_f1)
-    print(f"\n1. ToolCall-Trigger Similarity (whether tool_calls triggered)")
+    print(f"\n1. ToolCalls-Trigger Similarity (whether tool_calls triggered)")
     print(f"   Confusion Matrix:")
     print(f"     TP: {f1_metrics['tp']:3d}  |  FP: {f1_metrics['fp']:3d}")
     print(f"     FN: {f1_metrics['fn']:3d}  |  TN: {f1_metrics['tn']:3d}")
@@ -407,8 +407,8 @@ def print_results(model_name: str, f1_metrics: Dict, multi_metrics: Dict, accura
         for error_type, count in sorted(f1_metrics['error_detail'].items()):
             print(f"       {error_type}: {count}")
     
-    # 2. Multi-ToolCall-Trigger Similarity
-    print(f"\n2. Multi-ToolCall-Trigger Similarity (tool_calls count distribution)")
+    # 2. Multi-ToolCalls-Trigger Similarity
+    print(f"\n2. Multi-ToolCalls-Trigger Similarity (tool_calls count distribution)")
     print(f"   Cosine Similarity: {multi_metrics['cosine_similarity']:.4f} ({multi_metrics['cosine_similarity']*100:.2f}%)")
     
     print(f"\n   Detailed Distribution Comparison:")
@@ -422,8 +422,8 @@ def print_results(model_name: str, f1_metrics: Dict, multi_metrics: Dict, accura
               f"{item['model_prob']:<12.4f} "
               f"{item['prob_diff']:+12.4f}")
     
-    # 3. ToolCall-Accuracy (tool call success rate)
-    print(f"\n3. ToolCall-Accuracy (tool call success rate)")
+    # 3. ToolCalls-Schema-Accuracy (tool call success rate)
+    print(f"\n3. ToolCalls-Schema-Accuracy (tool call success rate)")
     print(f"   Success rate: {accuracy_metrics['accuracy']:.4f} ({accuracy_metrics['accuracy']*100:.2f}%)")
     print(f"   Successful:   {accuracy_metrics['tool_calls_successful_count']}")
     print(f"   Total:        {accuracy_metrics['tool_calls_finish_tool_calls']}")
@@ -533,17 +533,17 @@ def main(folder_path: str = '/data/minimax-dialogue/users/xiaojun/MiniMax-Vendor
         model_results = all_models_data[model_name]['results']
         model_summary = all_models_data[model_name]['summary']
         
-        # Calculate ToolCall-Trigger Similarity (F1)
+        # Calculate ToolCalls-Trigger Similarity
         f1_metrics = calculate_tool_call_f1(ref_results, model_results)
-        
-        # Calculate Multi-ToolCall-Trigger Similarity (Cosine)
+
+        # Calculate Multi-ToolCalls-Trigger Similarity (Cosine)
         multi_metrics = calculate_multi_toolcall_similarity(
             ref_summary['tool_calls_count_distribution'],
             model_summary['tool_calls_count_distribution']
         )
         
-        # Calculate ToolCall-Accuracy (success rate)
-        accuracy_metrics = calculate_toolcall_accuracy(model_summary)
+        # Calculate ToolCalls-Schema-Accuracy
+        accuracy_metrics = calculate_toolcall_schema_accuracy(model_summary)
         
         # Calculate Validation Metrics
         validation_metrics = calculate_validation_metrics(model_summary)
@@ -577,7 +577,7 @@ def main(folder_path: str = '/data/minimax-dialogue/users/xiaojun/MiniMax-Vendor
         print(f"{'-'*80}")
         
         # F1 Score
-        row = f"{'ToolCall-Trigger F1':<40}"
+        row = f"{'ToolCalls-Trigger Similarity':<40}"
         for model_name in model_names:
             if model_name != reference_model:
                 f1 = all_metrics[model_name]['f1_metrics']['f1']
@@ -610,15 +610,15 @@ def main(folder_path: str = '/data/minimax-dialogue/users/xiaojun/MiniMax-Vendor
         print(row)
         
         # Cosine Similarity
-        row = f"{'Multi-ToolCall-Trigger Similarity':<40}"
+        row = f"{'Multi-ToolCalls-Trigger Similarity':<40}"
         for model_name in model_names:
             if model_name != reference_model:
                 cos_sim = all_metrics[model_name]['multi_metrics']['cosine_similarity']
                 row += f" {cos_sim:.4f}         "
         print(row)
         
-        # ToolCall-Accuracy
-        row = f"{'ToolCall-Accuracy':<40}"
+        # ToolCalls-Schema-Accuracy
+        row = f"{'ToolCalls-Schema-Accuracy':<40}"
         for model_name in model_names:
             if model_name != reference_model:
                 accuracy = all_metrics[model_name]['accuracy_metrics']['accuracy']
@@ -683,7 +683,7 @@ def main(folder_path: str = '/data/minimax-dialogue/users/xiaojun/MiniMax-Vendor
                 'cosine_similarity': all_metrics[model_name]['multi_metrics']['cosine_similarity'],
                 'distribution_comparison': all_metrics[model_name]['multi_metrics']['distribution_comparison']
             },
-            'toolcall_accuracy': {
+            'toolcall_schema_accuracy': {
                 'accuracy': all_metrics[model_name]['accuracy_metrics']['accuracy'],
                 'tool_calls_successful_count': all_metrics[model_name]['accuracy_metrics']['tool_calls_successful_count'],
                 'tool_calls_finish_tool_calls': all_metrics[model_name]['accuracy_metrics']['tool_calls_finish_tool_calls']
@@ -703,7 +703,7 @@ def main(folder_path: str = '/data/minimax-dialogue/users/xiaojun/MiniMax-Vendor
     output['metric_descriptions'] = {
         'toolcall_trigger_similarity': 'Measures whether the model correctly triggers tool_calls (F1 Score)',
         'multi_toolcall_trigger_similarity': 'Measures the similarity of count distribution when triggering multiple tool_calls (Cosine Similarity)',
-        'toolcall_accuracy': 'Measures the success rate when triggering tool_calls (successful count / total count)',
+        'toolcall_schema_accuracy': 'Measures the correctness rate of tool-call payloads (function name and arguments meeting the expected schema)',
         'validation_metrics': 'Measures the success rate of the model on various validation rules (error_repeating, language_following)',
         'error_only_reasoning': 'Measures whether the model has errors with only reasoning while content and tool_calls are empty'
     }
