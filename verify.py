@@ -144,6 +144,8 @@ class ValidatorRunner:
                         message["reasoning_content"] = reason_text
         if self.model:
             req["model"] = self.model
+        if self.stream:
+            req["stream"] = True
         # Remove custom fields, do not pass to API
         req.pop("check_type", None)
         req.pop("expected_tool_call", None)
