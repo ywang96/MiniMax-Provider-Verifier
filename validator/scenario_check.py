@@ -34,8 +34,8 @@ class ScenarioCheckValidator(BaseValidator):
 
     @staticmethod
     def _get_visible_content(text: str) -> str:
-        """Strip <think>...</think> blocks to get visible reply only."""
-        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        """Strip <think>/<mm:think> reasoning blocks to get visible reply only."""
+        return re.sub(r"<(?:mm:)?think>.*?</(?:mm:)?think>", "", text, flags=re.DOTALL).strip()
 
     @staticmethod
     def _extract_actual_order(text: str, expected: list[str]) -> list[str]:
