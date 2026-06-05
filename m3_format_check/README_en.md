@@ -52,32 +52,53 @@ export M3_API_KEY="sk-xxx"
 | `M3_EXTRA_HEADERS` | (empty) | JSON string of extra request headers to inject, e.g. `'{"X-Custom-Header": "value"}'` |
 | `M3_SKIP_REASONING_SPLIT` | `0` | Set to `1` to skip cases that depend on `reasoning_split` (some implementations do not pass through this OAI extension) |
 | `M3_LONG_VIDEO_DIR` | `fixtures/m3_test_videos` | Long-video (D_*s.mp4) directory. Defaults to the in-repo fixtures; override to point at a different set. |
-| `M3_MEDIA_BASE_URL` | (empty) | Serve fixtures from this base URL instead of inline base64 (same as the `--media-base-url` option). See **URL media delivery** below. |
+| `M3_MEDIA_BASE_URL` | (empty) | **flat** resolver base URL (same as `--media-base-url`). See **URL media delivery** below. |
+| `M3_GCS_BUCKET` / `M3_GCS_SIGNER_SA` / `M3_GCS_URL_DURATION` | (empty) | **gcs-signed** resolver (same as `--gcs-bucket` / `--gcs-signer-sa` / `--gcs-url-duration`). |
 
-## URL media delivery (`--media-base-url`)
+## URL media delivery
 
-By default the suite embeds image/video as inline base64 (`data:` URIs). Pass a
-base URL to instead deliver media by reference — each asset whose bytes match a
-file under `fixtures/` is sent as `<base-url>/<basename>`, so the server fetches
-it instead of receiving it in the request body. This keeps request bodies tiny
-(useful when a gateway caps the request-body parse size) and exercises the
-server's URL-fetch path.
+By default the suite embeds image/video as inline base64 (`data:` URIs). URL
+media mode instead delivers media by reference, so the server fetches it rather
+than receiving it in the request body. This keeps request bodies tiny (useful
+when a gateway caps the request-body parse size) and exercises the server's
+URL-fetch path. Implementation in `url_media.py`; the startup banner prints the
+active mode.
+
+### Mode 1 — flat, pre-hosted (`--media-base-url`)
+
+Each asset whose bytes match a file under `fixtures/` is sent as
+`<base-url>/<basename>`. You host the files yourself (the suite does **not**
+upload); mapping is by content hash → basename.
 
 ```bash
-# via CLI option (takes precedence)
 pytest m3_image_tests.py --media-base-url=https://my-host.example.com/m3-fixtures
-# or via env var
-export M3_MEDIA_BASE_URL=https://my-host.example.com/m3-fixtures
-pytest m3_image_tests.py
+# or: export M3_MEDIA_BASE_URL=https://my-host.example.com/m3-fixtures
 ```
 
-**Pre-hosting contract:** you must host the fixtures yourself at
-`<base-url>/<basename>` (the suite does **not** upload). Mapping is by content
-hash → basename, so only files present under `fixtures/` are rewritten.
-Dynamically generated images (solid-color PNGs), padded/oversized fixtures, and
-intentionally-corrupted blobs have no matching file and stay inline. The startup
-banner prints `media URL mode → <base-url> (<N> fixtures mapped)`. Implementation
-in `url_media.py`.
+Only files present under `fixtures/` are rewritten. Dynamically generated images
+(solid-color PNGs), padded/oversized fixtures, and intentionally-corrupted blobs
+have no matching file and stay inline.
+
+### Mode 2 — GCS signed URLs, private bucket (`--gcs-bucket`)
+
+Uploads each inline asset to `gs://<bucket>/m3/<sha256>.<ext>` (if absent) and
+sends a time-limited V4 signed URL. Works with a **private** bucket — no public
+access needed — and covers *all* media including generated images (it uploads
+whatever the request contains). Takes precedence over flat mode when set.
+
+```bash
+pytest m3_image_tests.py \
+  --gcs-bucket=my-bucket \
+  --gcs-signer-sa=signer@my-project.iam.gserviceaccount.com \
+  --gcs-url-duration=12h        # optional, default 12h
+# or via env: M3_GCS_BUCKET / M3_GCS_SIGNER_SA / M3_GCS_URL_DURATION
+```
+
+Requirements: `gsutil` + `gcloud` on PATH, authenticated; the signer SA needs
+`roles/iam.serviceAccountTokenCreator` (to sign) and object read on the bucket;
+your account needs Token Creator on that SA. Uploads + signed URLs are cached on
+disk by content hash (`$TMPDIR/m3url_cache`) so xdist workers and repeats reuse
+them.
 
 ## Running
 

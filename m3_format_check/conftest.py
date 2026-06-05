@@ -83,21 +83,69 @@ def _is_xdist_controller(config) -> bool:
 
 
 def pytest_addoption(parser):
-    parser.addoption(
+    g = parser.getgroup("m3 url-media")
+    g.addoption(
         "--media-base-url",
         action="store",
         default=None,
         help=(
-            "Serve fixtures from this base URL instead of inline base64. Each "
-            "image/video whose bytes match a file under fixtures/ is sent as "
-            "<base-url>/<basename>. Host fixtures there beforehand. Falls back "
-            "to the M3_MEDIA_BASE_URL env var."
+            "FLAT resolver: serve fixtures from this base URL instead of inline "
+            "base64. Each image/video whose bytes match a file under fixtures/ is "
+            "sent as <base-url>/<basename>. Pre-host the fixtures there (no "
+            "upload). Env fallback: M3_MEDIA_BASE_URL."
         ),
+    )
+    g.addoption(
+        "--gcs-bucket",
+        action="store",
+        default=None,
+        help=(
+            "GCS-SIGNED resolver: upload inline media to gs://<bucket>/m3/ and "
+            "send a signed URL (works with a private bucket). Requires "
+            "--gcs-signer-sa. Env fallback: M3_GCS_BUCKET."
+        ),
+    )
+    g.addoption(
+        "--gcs-signer-sa",
+        action="store",
+        default=None,
+        help="Service account email used to sign GCS URLs (needs Token Creator "
+             "+ object read). Env fallback: M3_GCS_SIGNER_SA.",
+    )
+    g.addoption(
+        "--gcs-url-duration",
+        action="store",
+        default=None,
+        help="Signed-URL lifetime, e.g. 12h (default). Env fallback: M3_GCS_URL_DURATION.",
     )
 
 
-def _resolve_media_base_url(config):
-    return config.getoption("--media-base-url") or os.environ.get("M3_MEDIA_BASE_URL") or None
+def _make_media_resolver(config):
+    """Return a url_media resolver from CLI options / env, or None if disabled.
+
+    gcs-signed takes precedence when --gcs-bucket is given; otherwise flat mode
+    when --media-base-url is given.
+    """
+    import url_media
+
+    bucket = config.getoption("--gcs-bucket") or os.environ.get("M3_GCS_BUCKET")
+    base_url = config.getoption("--media-base-url") or os.environ.get("M3_MEDIA_BASE_URL")
+
+    if bucket:
+        sa = config.getoption("--gcs-signer-sa") or os.environ.get("M3_GCS_SIGNER_SA")
+        if not sa:
+            raise pytest.UsageError("--gcs-bucket requires --gcs-signer-sa (or M3_GCS_SIGNER_SA).")
+        duration = (config.getoption("--gcs-url-duration")
+                    or os.environ.get("M3_GCS_URL_DURATION") or "12h")
+        resolver = url_media.GcsSignedResolver(bucket, sa, duration=duration)
+        return resolver, f"gcs-signed → gs://{resolver.bucket}/m3 (signer {sa})"
+
+    if base_url:
+        manifest = url_media.build_manifest(Path(__file__).parent / "fixtures")
+        resolver = url_media.FlatResolver(base_url, manifest)
+        return resolver, f"flat → {base_url} ({len(manifest)} fixtures mapped)"
+
+    return None, None
 
 
 def pytest_configure(config):
@@ -125,25 +173,23 @@ def pytest_configure(config):
     if getattr(config, "workerinput", None) is None:
         print(f"\n[m3_api_test] run log → {log_path}")
 
-    # URL media mode: when a base URL is provided, rewrite inline data: media to
-    # pre-hosted <base-url>/<basename> URLs before each request is sent.
-    media_base_url = _resolve_media_base_url(config)
-    if media_base_url:
-        import url_media
-        manifest = url_media.build_manifest(Path(__file__).parent / "fixtures")
+    # URL media mode: when enabled, rewrite inline data: media to URLs (pre-hosted
+    # flat mapping, or per-object GCS signed URLs) before each request is sent.
+    import url_media
+    resolver, banner = _make_media_resolver(config)
+    if resolver is not None:
         _orig_oai_chat = helpers.oai_chat
 
         def _oai_chat_url(payload, *args, **kwargs):
             try:
-                url_media.rewrite_payload(payload, media_base_url, manifest)
+                url_media.rewrite_payload(payload, resolver)
             except Exception:
                 pass  # on any failure, fall back to inline delivery
             return _orig_oai_chat(payload, *args, **kwargs)
 
         helpers.oai_chat = _oai_chat_url
         if getattr(config, "workerinput", None) is None:
-            print(f"[m3_api_test] media URL mode → {media_base_url} "
-                  f"({len(manifest)} fixtures mapped)")
+            print(f"[m3_api_test] media URL mode → {banner}")
 
 
 # pytest_configure_node is an xdist-only hook. Define it conditionally so that

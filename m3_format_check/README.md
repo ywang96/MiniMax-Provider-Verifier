@@ -51,27 +51,45 @@ export M3_API_KEY="sk-xxx"
 | `M3_EXTRA_HEADERS` | (空) | JSON 串,额外注入请求头,例如 `'{"X-Custom-Header": "value"}'` |
 | `M3_SKIP_REASONING_SPLIT` | `0` | `1` 时跳过依赖 `reasoning_split` 的 case(部分实现不放行该 OAI extension) |
 | `M3_LONG_VIDEO_DIR` | `fixtures/m3_test_videos` | 长视频(D_*s.mp4)目录,默认走仓内 fixtures;需要换一组时改这里 |
-| `M3_MEDIA_BASE_URL` | (空) | 以该 base URL 提供媒体,替代内联 base64(等同 `--media-base-url` 选项)。见下方 **URL 媒体投递** |
+| `M3_MEDIA_BASE_URL` | (空) | **flat** 解析器 base URL(等同 `--media-base-url`)。见下方 **URL 媒体投递** |
+| `M3_GCS_BUCKET` / `M3_GCS_SIGNER_SA` / `M3_GCS_URL_DURATION` | (空) | **gcs-signed** 解析器(等同 `--gcs-bucket` / `--gcs-signer-sa` / `--gcs-url-duration`) |
 
-## URL 媒体投递(`--media-base-url`)
+## URL 媒体投递
 
-默认情况下,套件以内联 base64(`data:` URI)发送图片/视频。传入一个 base URL 后,
-凡是字节与 `fixtures/` 下某个文件一致的媒体,都会改为 `<base-url>/<basename>` 发送,
-由服务端去拉取,而不是塞进请求体。这样请求体很小(当网关对请求体解析大小有上限时很有用),
-同时也能测试服务端的 URL 拉取路径。
+默认套件以内联 base64(`data:` URI)发送图片/视频。开启 URL 媒体模式后,媒体改为按引用投递,
+由服务端拉取而非塞进请求体。这样请求体很小(当网关对请求体解析大小有上限时很有用),同时测试
+服务端的 URL 拉取路径。实现见 `url_media.py`,启动横幅会打印当前模式。
+
+### 模式一 —— flat,预托管(`--media-base-url`)
+
+字节与 `fixtures/` 下某文件一致的媒体改为 `<base-url>/<basename>` 发送。需自行托管文件
+(套件**不上传**),按“内容哈希 → 文件名”映射。
 
 ```bash
-# 命令行选项(优先级更高)
 pytest m3_image_tests.py --media-base-url=https://my-host.example.com/m3-fixtures
-# 或环境变量
-export M3_MEDIA_BASE_URL=https://my-host.example.com/m3-fixtures
-pytest m3_image_tests.py
+# 或:export M3_MEDIA_BASE_URL=https://my-host.example.com/m3-fixtures
 ```
 
-**预托管约定:** 需自行把 fixtures 托管到 `<base-url>/<basename>`(套件**不会**上传)。
-映射按“内容哈希 → 文件名”进行,因此只有 `fixtures/` 下存在的文件才会被改写;动态生成的图片
-(纯色 PNG)、被填充放大的 fixture、故意损坏的数据没有对应文件,仍走内联。启动横幅会打印
-`media URL mode → <base-url> (<N> fixtures mapped)`。实现见 `url_media.py`。
+只有 `fixtures/` 下存在的文件会被改写;动态生成的图片(纯色 PNG)、被填充放大的 fixture、
+故意损坏的数据没有对应文件,仍走内联。
+
+### 模式二 —— GCS 签名 URL,私有桶(`--gcs-bucket`)
+
+将每个内联媒体上传到 `gs://<bucket>/m3/<sha256>.<ext>`(若不存在),并发送限时 V4 签名 URL。
+适用于**私有**桶(无需公开访问),且覆盖**所有**媒体(含动态生成的图片,按请求内容上传)。
+设置后优先于 flat 模式。
+
+```bash
+pytest m3_image_tests.py \
+  --gcs-bucket=my-bucket \
+  --gcs-signer-sa=signer@my-project.iam.gserviceaccount.com \
+  --gcs-url-duration=12h        # 可选,默认 12h
+# 或环境变量:M3_GCS_BUCKET / M3_GCS_SIGNER_SA / M3_GCS_URL_DURATION
+```
+
+前置要求:PATH 上有已认证的 `gsutil` + `gcloud`;签名 SA 需 `roles/iam.serviceAccountTokenCreator`
+(用于签名)及桶对象读权限;当前账号需对该 SA 拥有 Token Creator。上传与签名 URL 按内容哈希
+缓存在磁盘(`$TMPDIR/m3url_cache`),xdist 各 worker 与重复请求复用。
 
 ## 运行
 
