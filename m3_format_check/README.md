@@ -51,6 +51,27 @@ export M3_API_KEY="sk-xxx"
 | `M3_EXTRA_HEADERS` | (空) | JSON 串,额外注入请求头,例如 `'{"X-Custom-Header": "value"}'` |
 | `M3_SKIP_REASONING_SPLIT` | `0` | `1` 时跳过依赖 `reasoning_split` 的 case(部分实现不放行该 OAI extension) |
 | `M3_LONG_VIDEO_DIR` | `fixtures/m3_test_videos` | 长视频(D_*s.mp4)目录,默认走仓内 fixtures;需要换一组时改这里 |
+| `M3_MEDIA_BASE_URL` | (空) | 以该 base URL 提供媒体,替代内联 base64(等同 `--media-base-url` 选项)。见下方 **URL 媒体投递** |
+
+## URL 媒体投递(`--media-base-url`)
+
+默认情况下,套件以内联 base64(`data:` URI)发送图片/视频。传入一个 base URL 后,
+凡是字节与 `fixtures/` 下某个文件一致的媒体,都会改为 `<base-url>/<basename>` 发送,
+由服务端去拉取,而不是塞进请求体。这样请求体很小(当网关对请求体解析大小有上限时很有用),
+同时也能测试服务端的 URL 拉取路径。
+
+```bash
+# 命令行选项(优先级更高)
+pytest m3_image_tests.py --media-base-url=https://my-host.example.com/m3-fixtures
+# 或环境变量
+export M3_MEDIA_BASE_URL=https://my-host.example.com/m3-fixtures
+pytest m3_image_tests.py
+```
+
+**预托管约定:** 需自行把 fixtures 托管到 `<base-url>/<basename>`(套件**不会**上传)。
+映射按“内容哈希 → 文件名”进行,因此只有 `fixtures/` 下存在的文件才会被改写;动态生成的图片
+(纯色 PNG)、被填充放大的 fixture、故意损坏的数据没有对应文件,仍走内联。启动横幅会打印
+`media URL mode → <base-url> (<N> fixtures mapped)`。实现见 `url_media.py`。
 
 ## 运行
 

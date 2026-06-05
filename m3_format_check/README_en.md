@@ -52,6 +52,32 @@ export M3_API_KEY="sk-xxx"
 | `M3_EXTRA_HEADERS` | (empty) | JSON string of extra request headers to inject, e.g. `'{"X-Custom-Header": "value"}'` |
 | `M3_SKIP_REASONING_SPLIT` | `0` | Set to `1` to skip cases that depend on `reasoning_split` (some implementations do not pass through this OAI extension) |
 | `M3_LONG_VIDEO_DIR` | `fixtures/m3_test_videos` | Long-video (D_*s.mp4) directory. Defaults to the in-repo fixtures; override to point at a different set. |
+| `M3_MEDIA_BASE_URL` | (empty) | Serve fixtures from this base URL instead of inline base64 (same as the `--media-base-url` option). See **URL media delivery** below. |
+
+## URL media delivery (`--media-base-url`)
+
+By default the suite embeds image/video as inline base64 (`data:` URIs). Pass a
+base URL to instead deliver media by reference — each asset whose bytes match a
+file under `fixtures/` is sent as `<base-url>/<basename>`, so the server fetches
+it instead of receiving it in the request body. This keeps request bodies tiny
+(useful when a gateway caps the request-body parse size) and exercises the
+server's URL-fetch path.
+
+```bash
+# via CLI option (takes precedence)
+pytest m3_image_tests.py --media-base-url=https://my-host.example.com/m3-fixtures
+# or via env var
+export M3_MEDIA_BASE_URL=https://my-host.example.com/m3-fixtures
+pytest m3_image_tests.py
+```
+
+**Pre-hosting contract:** you must host the fixtures yourself at
+`<base-url>/<basename>` (the suite does **not** upload). Mapping is by content
+hash → basename, so only files present under `fixtures/` are rewritten.
+Dynamically generated images (solid-color PNGs), padded/oversized fixtures, and
+intentionally-corrupted blobs have no matching file and stay inline. The startup
+banner prints `media URL mode → <base-url> (<N> fixtures mapped)`. Implementation
+in `url_media.py`.
 
 ## Running
 

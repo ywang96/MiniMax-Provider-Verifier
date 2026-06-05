@@ -12,6 +12,11 @@ Optional env vars:
   M3_RUN_LOG    — Override the per-run jsonl path. Default is
                   ./logs/run_<UTC-ts>.jsonl (or run_<UTC-ts>_<workerid>.jsonl
                   per worker when running under pytest-xdist).
+  M3_MEDIA_BASE_URL — Serve fixtures from this base URL instead of inline
+                  base64 (same as the --media-base-url CLI option). Each
+                  image/video whose bytes match a file under fixtures/ is sent
+                  as <base-url>/<basename>; pre-host the fixtures there. See
+                  url_media.py.
 
 Concurrency:
   Serial (default):
@@ -77,6 +82,24 @@ def _is_xdist_controller(config) -> bool:
     return bool(n) and n != 0
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--media-base-url",
+        action="store",
+        default=None,
+        help=(
+            "Serve fixtures from this base URL instead of inline base64. Each "
+            "image/video whose bytes match a file under fixtures/ is sent as "
+            "<base-url>/<basename>. Host fixtures there beforehand. Falls back "
+            "to the M3_MEDIA_BASE_URL env var."
+        ),
+    )
+
+
+def _resolve_media_base_url(config):
+    return config.getoption("--media-base-url") or os.environ.get("M3_MEDIA_BASE_URL") or None
+
+
 def pytest_configure(config):
     if not BASE_URL or not API_KEY:
         raise pytest.UsageError(
@@ -101,6 +124,26 @@ def pytest_configure(config):
     # want one print-per-worker cluttering the header).
     if getattr(config, "workerinput", None) is None:
         print(f"\n[m3_api_test] run log → {log_path}")
+
+    # URL media mode: when a base URL is provided, rewrite inline data: media to
+    # pre-hosted <base-url>/<basename> URLs before each request is sent.
+    media_base_url = _resolve_media_base_url(config)
+    if media_base_url:
+        import url_media
+        manifest = url_media.build_manifest(Path(__file__).parent / "fixtures")
+        _orig_oai_chat = helpers.oai_chat
+
+        def _oai_chat_url(payload, *args, **kwargs):
+            try:
+                url_media.rewrite_payload(payload, media_base_url, manifest)
+            except Exception:
+                pass  # on any failure, fall back to inline delivery
+            return _orig_oai_chat(payload, *args, **kwargs)
+
+        helpers.oai_chat = _oai_chat_url
+        if getattr(config, "workerinput", None) is None:
+            print(f"[m3_api_test] media URL mode → {media_base_url} "
+                  f"({len(manifest)} fixtures mapped)")
 
 
 # pytest_configure_node is an xdist-only hook. Define it conditionally so that
