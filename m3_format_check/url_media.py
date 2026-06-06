@@ -18,8 +18,12 @@ Two resolvers (selected in conftest from CLI options / env vars):
   `gsutil` + `gcloud` on PATH and a signer service account with Token Creator
   (for signing) and object read on the bucket.
 
-Both resolvers leave media inline when they cannot produce a URL (e.g. a flat
-miss, or a decode failure), so the request still goes through.
+Strict, never-base64 contract: when URL media mode is enabled, the suite MUST
+deliver every inline `data:` asset as a URL. If a URL cannot be produced (flat
+miss, upload/sign failure, etc.), `rewrite_payload` raises instead of silently
+falling back to inline base64 — the request fails loudly rather than degrading
+to a large body. Subprocess calls (upload/sign) retry to absorb transient
+concurrency failures.
 """
 import base64
 import hashlib
@@ -27,7 +31,33 @@ import json
 import os
 import subprocess
 import threading
+import time
 from pathlib import Path
+
+# Retry policy for gsutil/gcloud subprocess calls (absorbs transient failures
+# under xdist concurrency so we never have to fall back to base64).
+_RETRIES = int(os.environ.get("M3_URL_RETRIES", "4"))
+_BACKOFF = float(os.environ.get("M3_URL_BACKOFF", "1.5"))
+
+
+class MediaUrlError(RuntimeError):
+    """Raised when URL media mode cannot deliver an asset as a URL."""
+
+
+def _run(cmd: list[str]):
+    """Run a subprocess with retries; raise the last error after _RETRIES."""
+    last = None
+    for attempt in range(_RETRIES):
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            last = e
+            if attempt < _RETRIES - 1:
+                time.sleep(_BACKOFF * (attempt + 1))
+    raise MediaUrlError(
+        f"command failed after {_RETRIES} attempts: {' '.join(cmd[:3])}… "
+        f"stderr={(last.stderr or '')[:200] if last else ''}"
+    )
 
 _EXT = {
     "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg",
@@ -98,15 +128,12 @@ class GcsSignedResolver:
             if not os.path.exists(blob):
                 with open(blob, "wb") as f:
                     f.write(raw)
-            subprocess.run(
-                ["gsutil", "-q", "cp", blob, f"gs://{self.bucket}/m3/{key}"],
-                check=True)
-            out = subprocess.run(
+            _run(["gsutil", "-q", "cp", blob, f"gs://{self.bucket}/m3/{key}"])
+            out = _run(
                 ["gcloud", "storage", "sign-url", f"gs://{self.bucket}/m3/{key}",
                  "--impersonate-service-account", self.sa,
                  f"--duration={self.duration}", f"--region={self.region}",
-                 "--format=json"],
-                capture_output=True, text=True, check=True)
+                 "--format=json"])
             d = json.loads(out.stdout)
             url = (d[0] if isinstance(d, list) else d)["signed_url"]
             with open(cache_file, "w") as f:
@@ -132,7 +159,12 @@ def build_manifest(fixtures_dir) -> dict:
 
 
 def rewrite_payload(payload: dict, resolver) -> int:
-    """Rewrite inline data: media to URLs using `resolver`. Returns count rewritten."""
+    """Rewrite every inline data: image/video to a URL using `resolver`.
+
+    Strict, never-base64: if any inline asset cannot be turned into a URL
+    (undecodable, flat miss, upload/sign failure), raise MediaUrlError rather
+    than leave base64 in the request. Returns the number of parts rewritten.
+    """
     rewritten = 0
     for msg in payload.get("messages") or []:
         content = msg.get("content")
@@ -149,12 +181,16 @@ def rewrite_payload(payload: dict, resolver) -> int:
                     continue
                 mime, raw = _decode_data_uri(ref["url"])
                 if raw is None:
-                    continue
-                try:
-                    url = resolver.resolve(raw, mime)
-                except Exception:
-                    url = None  # fall back to inline on resolver error
-                if url:
-                    ref["url"] = url
-                    rewritten += 1
+                    raise MediaUrlError(
+                        f"undecodable inline {key} data: URI; refusing to send base64"
+                    )
+                url = resolver.resolve(raw, mime)  # resolver/_run raise on failure
+                if not url:
+                    raise MediaUrlError(
+                        f"no URL for inline {key} ({len(raw)} bytes, {mime}); "
+                        f"refusing to fall back to base64"
+                    )
+                ref["url"] = url
+                rewritten += 1
+    return rewritten
     return rewritten

@@ -181,10 +181,9 @@ def pytest_configure(config):
         _orig_oai_chat = helpers.oai_chat
 
         def _oai_chat_url(payload, *args, **kwargs):
-            try:
-                url_media.rewrite_payload(payload, resolver)
-            except Exception:
-                pass  # on any failure, fall back to inline delivery
+            # Strict: never fall back to inline base64. If a URL can't be
+            # produced, url_media raises and the request fails loudly.
+            url_media.rewrite_payload(payload, resolver)
             return _orig_oai_chat(payload, *args, **kwargs)
 
         helpers.oai_chat = _oai_chat_url

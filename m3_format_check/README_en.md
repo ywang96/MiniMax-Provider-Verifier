@@ -98,7 +98,19 @@ Requirements: `gsutil` + `gcloud` on PATH, authenticated; the signer SA needs
 `roles/iam.serviceAccountTokenCreator` (to sign) and object read on the bucket;
 your account needs Token Creator on that SA. Uploads + signed URLs are cached on
 disk by content hash (`$TMPDIR/m3url_cache`) so xdist workers and repeats reuse
-them.
+them. Upload/sign subprocesses retry (`M3_URL_RETRIES`, default 4) to absorb
+transient failures. **If your org enforces periodic gcloud reauth, run
+`gcloud auth login` first** — a lapsed session makes `gsutil`/`gcloud` fail
+non-interactively (`ReauthUnattendedError`), which aborts the run (see below).
+
+### Never falls back to base64
+
+When URL media mode is on, the suite **never** silently sends inline base64. If a
+URL can't be produced for an asset (flat-mode miss, upload/sign failure, lapsed
+auth, undecodable data URI), `url_media.rewrite_payload` raises `MediaUrlError`
+and the request fails loudly — it does not degrade to a large base64 body. Use
+`gcs-signed` (which uploads anything) for full coverage; flat mode only covers
+fixtures you pre-hosted.
 
 ## Running
 
