@@ -38,8 +38,8 @@ OAI_HEADERS = {
     "Content-Type": "application/json",
 }
 
-# M3_EXTRA_HEADERS: JSON 串,跨链路注入的额外请求头(如 X-MM-Text-Provider-Model)
-# 形如 '{"X-MM-Text-Provider-Model": "togetherai-m3:shadow/xxx"}',解析失败则忽略
+# M3_EXTRA_HEADERS: JSON string, extra request headers injected across links (e.g. X-MM-Text-Provider-Model)
+# Looks like '{"X-MM-Text-Provider-Model": "togetherai-m3:shadow/xxx"}'; ignored on parse failure
 _raw_extra_headers = os.environ.get("M3_EXTRA_HEADERS", "").strip()
 if _raw_extra_headers:
     try:
@@ -91,16 +91,16 @@ def _write_log_line(record: dict) -> None:
         f.flush()
 
 
-# --------------- Test images (≥672 px, low 档最小尺寸) ---------------
+# --------------- Test images (≥672 px, low-tier minimum size) ---------------
 #
-# 图片格式说明:
-# - PNG 运行时按 RGB 参数生成 672×672 纯色,因为 v05/t10 等 case 需要不同颜色;
-# - JPEG / GIF / WEBP 是 ffmpeg 离线生成的 672×672 红色纯色单帧,base64 硬编码以避免运行时依赖;
-# - 视频 MP4 是 ffmpeg 离线生成的 504×504 / 1秒 / H.264 黑色,base64 硬编码。
-# 下游有任何"必须 ≥ low 档最小尺寸"的服务端规则(图片 ≥672、视频 ≥504),这些夹具都满足。
+# Image format notes:
+# - PNG is generated at runtime as a 672×672 solid color from RGB params, since v05/t10 etc. need different colors;
+# - JPEG / GIF / WEBP are ffmpeg-generated 672×672 solid-red single frames, base64-hardcoded to avoid runtime dependencies;
+# - Video MP4 is ffmpeg-generated 504×504 / 1s / H.264 black, base64-hardcoded.
+# Whenever the downstream has a "must be ≥ low-tier minimum size" server-side rule (images ≥672, videos ≥504), these fixtures satisfy it.
 
-_PNG_SIDE = 672  # 图片最短边:满足 low 档(≥672 px)
-_MP4_SIDE = 504  # 视频最短边:满足 low 档(≥504 px)
+_PNG_SIDE = 672  # Image shortest side: satisfies low tier (≥672 px)
+_MP4_SIDE = 504  # Video shortest side: satisfies low tier (≥504 px)
 
 
 def make_png_672(r=255, g=0, b=0, side=_PNG_SIDE):
@@ -276,7 +276,7 @@ _WEBP_672_RED_B64 = (
     "AA=="
 )
 
-# MP4 504×504 / 1s / H.264 black (raw 2456 B / b64 3276 B) — satisfies low 档 ≥504 px
+# MP4 504×504 / 1s / H.264 black (raw 2456 B / b64 3276 B) — satisfies low tier ≥504 px
 _MP4_504_BLACK_B64 = (
     "AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAANgbW9vdgAAAGxtdmhkAAAAAAAAAAAA"
     "AAAAAAAD6AAAA+gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAA"
@@ -326,17 +326,17 @@ _MP4_504_BLACK_B64 = (
 
 
 def make_jpeg_672():
-    """672×672 red JPEG, ffmpeg-generated, low 档兼容。"""
+    """672×672 red JPEG, ffmpeg-generated, low-tier compatible."""
     return base64.b64decode(_JPEG_672_RED_B64)
 
 
 def make_gif_672():
-    """672×672 red GIF, ffmpeg-generated, low 档兼容。"""
+    """672×672 red GIF, ffmpeg-generated, low-tier compatible."""
     return base64.b64decode(_GIF_672_RED_B64)
 
 
 def make_webp_672():
-    """672×672 red WEBP, ffmpeg-generated, low 档兼容。"""
+    """672×672 red WEBP, ffmpeg-generated, low-tier compatible."""
     return base64.b64decode(_WEBP_672_RED_B64)
 
 
@@ -363,11 +363,12 @@ def corrupted_base64():
 def large_image_base64(size_mb=12):
     """Generate oversized base64 image: a 672×672 PNG header + zero-pad to size_mb.
 
-    ⚠️ 已知问题(2026-06-04):此 helper 用 stdlib 手写的极简纯色 PNG 做底,部分供应商
-    (如 fireworks-m3)的 vision preprocess 对"纯色 / 极低熵"图像有 silent drop
-    行为(详见 badcase_scripts/fireworks_m3_11_02_root_cause_probe*),会导致 size 校验
-    被绕过——服务端在 size check 之前就把图丢了,统一返 200 + 兜底 fallback 文本。
-    需要严格断言 size > 上限必须 4xx 的 case 请用 oversized_real_image_data_url()。
+    ⚠️ Known issue (2026-06-04): this helper uses a stdlib hand-crafted minimal solid-color PNG as the base,
+    and some providers (e.g. fireworks-m3) have a silent drop behavior in their vision preprocess for
+    "solid color / extremely low entropy" images (see badcase_scripts/fireworks_m3_11_02_root_cause_probe*),
+    causing the size check to be bypassed — the server drops the image before the size check and uniformly
+    returns 200 + fallback text. For cases that strictly require asserting "size > cap must be 4xx",
+    use oversized_real_image_data_url() instead.
     """
     data = make_png_672() + b"\x00" * (size_mb * 1024 * 1024)
     return "data:image/png;base64," + base64.b64encode(data).decode()
@@ -376,9 +377,9 @@ def large_image_base64(size_mb=12):
 def oversized_real_image_data_url(size_mb=12, fixture="sx1.jpg", media_type="image/jpeg"):
     """Generate oversized base64 by padding a REAL image with zero bytes to size_mb.
 
-    用真实自然图(默认 sx1.jpg 海边女子,239 KB JPEG)做底 + zero padding,绕过供应商
-    对"极简纯色 PNG"的 silent drop bug(见 [[large_image_base64]] 注释)。padding 不
-    影响 JPEG/PNG 头部,可被前端校验识别成完整 image data url。
+    Uses a real natural image (default sx1.jpg, woman at the seaside, 239 KB JPEG) as base + zero padding,
+    to bypass providers' silent drop bug for "minimal solid-color PNG" (see [[large_image_base64]] notes).
+    Padding does not affect the JPEG/PNG header and can be recognized by frontend validation as a complete image data url.
     """
     fixture_path = Path(__file__).parent / "fixtures" / "m3_test_images" / "real" / fixture
     if not fixture_path.exists():
@@ -393,7 +394,7 @@ def mime_mismatch_base64():
     return "data:image/jpeg;base64," + base64.b64encode(make_png_672()).decode()
 
 
-# --------------- Test video (504×504, 1s, H.264; low 档兼容) ---------------
+# --------------- Test video (504×504, 1s, H.264; low-tier compatible) ---------------
 
 SAMPLE_VIDEO_URL = "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
 
@@ -409,32 +410,32 @@ def mp4_base64():
 
 # --------------- Oversize fixtures (size-limit boundary tests) ---------------
 #
-# 服务端文件大小约束(size-limit 边界测):
-#   - 图片 ≤ 10 MB(URL/Base64 都适用)
-#   - 视频 ≤ 50 MB(URL/Base64 都适用)
-#   - 请求体 ≤ 64 MB(Base64 路径才容易触发)
-# 5 个 fixture 同时入 git(总 ~150MB)和 COS,加载逻辑:本地存在则读本地,不存在则从 COS URL 下载并缓存。
+# Server-side file size constraints (size-limit boundary tests):
+#   - Images ≤ 10 MB (applies to both URL and Base64)
+#   - Videos ≤ 50 MB (applies to both URL and Base64)
+#   - Request body ≤ 64 MB (easy to trigger via Base64 path)
+# 5 fixtures are committed to git (~150MB total) and to COS; loading logic: read local if present, otherwise download from COS URL and cache.
 _FIXTURES_DIR = Path(__file__).parent / "fixtures"
 _COS_BASE = "https://qa-tool-1315599187.cos.ap-shanghai.myqcloud.com/m3-test"
 
-# 文件名 → COS URL(被 size_limit 测试用做 URL 路径)
+# Filename → COS URL (used as URL path by size_limit tests)
 SIZE_FIXTURE_URLS = {
-    "image_9mb.png":   f"{_COS_BASE}/image_9mb.png",   # ~9.2 MB,图 ≤10MB(应 pass)
-    "image_11mb.png":  f"{_COS_BASE}/image_11mb.png",  # ~11.1 MB,图 >10MB(应 reject)
-    "image_65mb.png":  f"{_COS_BASE}/image_65mb.png",  # ~67 MB,base64 撞 64MB 请求体上限(应 reject)
-    "video_49mb.mp4":  f"{_COS_BASE}/video_49mb.mp4",  # ~47.4 MB,视频 ≤50MB(应 pass)
-    "video_51mb.mp4":  f"{_COS_BASE}/video_51mb.mp4",  # ~52 MB,视频 >50MB(应 reject)
+    "image_9mb.png":   f"{_COS_BASE}/image_9mb.png",   # ~9.2 MB, image ≤10MB (should pass)
+    "image_11mb.png":  f"{_COS_BASE}/image_11mb.png",  # ~11.1 MB, image >10MB (should reject)
+    "image_65mb.png":  f"{_COS_BASE}/image_65mb.png",  # ~67 MB, base64 hits the 64MB request body cap (should reject)
+    "video_49mb.mp4":  f"{_COS_BASE}/video_49mb.mp4",  # ~47.4 MB, video ≤50MB (should pass)
+    "video_51mb.mp4":  f"{_COS_BASE}/video_51mb.mp4",  # ~52 MB, video >50MB (should reject)
 }
 
 
 def load_size_fixture(name: str) -> bytes:
-    """从本地 fixtures 加载;若不存在,从 COS 下载并缓存到本地。"""
+    """Load from local fixtures; if missing, download from COS and cache locally."""
     if name not in SIZE_FIXTURE_URLS:
         raise ValueError(f"unknown size fixture: {name}")
     fp = _FIXTURES_DIR / name
     if fp.exists():
         return fp.read_bytes()
-    # fallback: 从 COS 拉
+    # fallback: pull from COS
     _FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
     url = SIZE_FIXTURE_URLS[name]
     with httpx.stream("GET", url, timeout=300.0) as resp:
@@ -446,14 +447,14 @@ def load_size_fixture(name: str) -> bytes:
 
 
 def size_fixture_url(name: str) -> str:
-    """返回 fixture 的 COS URL(供 image_url/video_url URL 路径使用)。"""
+    """Return the fixture's COS URL (for image_url/video_url URL path)."""
     if name not in SIZE_FIXTURE_URLS:
         raise ValueError(f"unknown size fixture: {name}")
     return SIZE_FIXTURE_URLS[name]
 
 
 def size_fixture_data_url(name: str) -> str:
-    """返回 fixture 的 base64 data URL(供 image_url/video_url base64 路径使用)。"""
+    """Return the fixture's base64 data URL (for image_url/video_url base64 path)."""
     raw = load_size_fixture(name)
     if name.endswith(".png"):
         return "data:image/png;base64," + base64.b64encode(raw).decode()
@@ -552,11 +553,11 @@ NESTED_SCHEMA_TOOL_OAI = {
 }
 
 
-# --------------- 进阶 schema tools (G2~G7 用) ---------------
+# --------------- Advanced schema tools (for G2~G7) ---------------
 
-# 无参工具,G2 多工具并行用(get_current_time 不需要业务参数)
-# 注意: M3 官方网关强校验 function.parameters 非空(spec 1.8.1 标可选,实际不允许)
-# → 用 {"type":"object","properties":{}} 表达"接受空参数对象"
+# Zero-arg tool, used by G2 multi-tool parallel (get_current_time takes no business params)
+# Note: M3 official gateway strictly validates that function.parameters is non-empty (spec 1.8.1 marks it optional, but actually not allowed)
+# → use {"type":"object","properties":{}} to express "accepts an empty parameters object"
 TIME_TOOL_OAI = {
     "type": "function",
     "function": {
@@ -566,7 +567,7 @@ TIME_TOOL_OAI = {
     },
 }
 
-# 带 enum 的天气工具,G3 enum 校验用
+# Weather tool with enum, used for G3 enum validation
 WEATHER_WITH_UNIT_TOOL_OAI = {
     "type": "function",
     "function": {
@@ -587,7 +588,7 @@ WEATHER_WITH_UNIT_TOOL_OAI = {
     },
 }
 
-# 带数值范围的预报工具,G4 min/max 校验用
+# Forecast tool with numeric range, used for G4 min/max validation
 FORECAST_TOOL_OAI = {
     "type": "function",
     "function": {
@@ -609,7 +610,7 @@ FORECAST_TOOL_OAI = {
     },
 }
 
-# 多 required 字段的机票查询工具,G5 多 required 校验用
+# Flight search tool with multiple required fields, used for G5 multi-required validation
 FLIGHT_SEARCH_TOOL_OAI = {
     "type": "function",
     "function": {
@@ -633,7 +634,7 @@ FLIGHT_SEARCH_TOOL_OAI = {
     },
 }
 
-# 嵌套 array-of-objects 的订房工具,G6 嵌套校验用
+# Booking tool with nested array-of-objects, used for G6 nested validation
 BOOKING_TOOL_OAI = {
     "type": "function",
     "function": {
@@ -668,12 +669,12 @@ BOOKING_TOOL_OAI = {
 def _extract_trace_id(response_headers: Optional[dict],
                       body: Optional[dict],
                       chunks: Optional[list]) -> Optional[str]:
-    """Best-effort 抽 trace_id:header 优先 → body.id (non_stream) → chunks[0].id (stream).
+    """Best-effort trace_id extraction: header first → body.id (non_stream) → chunks[0].id (stream).
 
-    顺序考虑:
-      1. 网关层 x-request-id / x-trace-id / trace-id (case-insensitive),最贴近"请求级唯一标识"
-      2. body["id"] — OAI chat.completion 规范字段 chatcmpl-xxx,必返
-      3. stream 模式下从首个 data chunk 取 id(与 body.id 同源)
+    Order considerations:
+      1. Gateway-layer x-request-id / x-trace-id / trace-id (case-insensitive), closest to a "per-request unique identifier"
+      2. body["id"] — OAI chat.completion spec field chatcmpl-xxx, always returned
+      3. In stream mode, take id from the first data chunk (same source as body.id)
     """
     if response_headers:
         lower = {k.lower(): v for k, v in response_headers.items()}
@@ -721,8 +722,8 @@ def oai_chat(payload, stream=False, headers=None, timeout=TIMEOUT):
                 with c.stream("POST", OAI_URL, json=payload, headers=hdrs) as resp:
                     status = resp.status_code
                     response_headers = dict(resp.headers)
-                    # 错误响应通常不是 SSE 而是 JSON,直接 read 出来塞 body,跳过 iter_lines
-                    # (iter_lines 只 capture "data: " / "event: " 前缀,JSON 错误体会被静默吞掉)
+                    # Error responses are usually not SSE but plain JSON; read the body directly and skip iter_lines
+                    # (iter_lines only captures "data: " / "event: " prefixes, so a JSON error body would be silently swallowed)
                     if status >= 400:
                         resp.read()
                         try:
@@ -805,11 +806,11 @@ def assert_oai_success(result):
 
 
 def assert_oai_stream_success(result):
-    """OAI 流式成功断言:HTTP 200 + chunks 非空 + 末尾含合法 finish_reason。
+    """OAI streaming success assertion: HTTP 200 + non-empty chunks + tail contains a valid finish_reason.
 
-    末尾 finish_reason 校验融入 assert_stream_complete 逻辑,
-    让所有 stream case 自动受益(无需逐个手动加)。
-    若 case 故意需要"无 finish_reason"(极少数极端测试),改用裸的 status==200 检查。
+    The tail finish_reason check is folded into the assert_stream_complete logic
+    so all stream cases benefit automatically (no need to add it case by case).
+    If a case intentionally needs "no finish_reason" (very rare extreme tests), use the bare status==200 check instead.
     """
     assert result["status"] == 200, f"Expected 200, got {result['status']}"
     assert result.get("stream")
@@ -818,14 +819,14 @@ def assert_oai_stream_success(result):
 
 
 def assert_stream_complete(result, msg: str = ""):
-    """断言流式响应正常结束:最后一个非空 chunk 含合法 finish_reason。
+    """Assert a streaming response finishes cleanly: the last non-empty chunk carries a valid finish_reason.
 
-    背景:OAI 流式协议要求结束帧(或带 [DONE] 标记)。M3 实测最后 chunk 含
-    `choices[0].finish_reason ∈ {stop, length, tool_calls, content_filter}`。
+    Background: the OAI streaming protocol requires a terminating frame (or a [DONE] marker). Empirically, M3's last chunk
+    carries `choices[0].finish_reason ∈ {stop, length, tool_calls, content_filter}`.
     """
     chunks = result.get("chunks") or []
     assert chunks, f"{msg}: stream has no chunks"
-    # 跳过末尾的纯 usage chunk(choices 可能为空) 和 [DONE] 标记
+    # Skip the trailing pure-usage chunk (choices may be empty) and the [DONE] marker
     finish_reason = None
     for c in reversed(chunks):
         choices = c.get("choices") or []
@@ -851,19 +852,19 @@ def assert_error(result, expected_status):
 
 # --------------- Thinking detection ---------------
 # spec 1.4: thinking.type ∈ disabled / adaptive
-# 不同 OAI 兼容实现可能把思考放在不同位置,这里做鲁棒检测:
-#   1) <think>...</think> 标签包在 content 里 (V04/V09 注释的 BUG-X 形态)
-#   2) message.reasoning_content 单独字段(reasoning_split=true 时常见)
+# Different OAI-compatible implementations may place thinking in different locations; do a robust detection here:
+#   1) <think>...</think> tag wrapped inside content (BUG-X form annotated in V04/V09)
+#   2) message.reasoning_content as a separate field (common when reasoning_split=true)
 #   3) usage.completion_tokens_details.reasoning_tokens > 0
-# 任一命中即视为"思考过"。
+# Any hit counts as "did think".
 
 def _stream_choice_message(result: dict) -> dict:
-    """从流式 result 聚合 delta 还原 message-like dict(取首个 choice)。
+    """Aggregate deltas from a streaming result back into a message-like dict (takes the first choice).
 
-    兼容两种 thinking 字段命名:
+    Compatible with two thinking field namings:
       - M3 spec: delta.reasoning_content
-      - Together/部分 OAI 兼容实现: delta.reasoning
-    任一出现即累加到 reasoning_content 里。
+      - Together / some OAI-compatible implementations: delta.reasoning
+    Either occurrence is accumulated into reasoning_content.
     """
     msg = {"content": "", "reasoning_content": ""}
     for chunk in result.get("chunks") or []:
@@ -875,14 +876,14 @@ def _stream_choice_message(result: dict) -> dict:
             msg["content"] += delta["content"]
         if delta.get("reasoning_content"):
             msg["reasoning_content"] += delta["reasoning_content"]
-        # 兼容 together-m3 等实现的 delta.reasoning
+        # Compat for together-m3 etc. that emit delta.reasoning
         if delta.get("reasoning"):
             msg["reasoning_content"] += delta["reasoning"]
     return msg
 
 
 def _stream_usage(result: dict) -> dict:
-    """流式 result 取最后一个含 usage 的 chunk 的 usage 字段"""
+    """From a streaming result, take the usage field of the last chunk that contains usage."""
     for chunk in reversed(result.get("chunks") or []):
         if isinstance(chunk, dict) and chunk.get("usage"):
             return chunk["usage"]
@@ -890,17 +891,17 @@ def _stream_usage(result: dict) -> dict:
 
 
 def get_thinking_signals(result: dict) -> dict:
-    """提取所有可能的 thinking 信号,供断言/调试用。
+    """Extract all possible thinking signals, for use in assertions/debugging.
 
-    兼容两种字段命名(M3 spec / together 等 OAI 兼容):
+    Compatible with two field namings (M3 spec / together etc. OAI-compatible):
       - message.reasoning_content (spec)
       - message.reasoning         (together)
-    任一非空即视为有思考。usage.*_tokens 不再作为判定依据(各家实现差异太大)。
+    Either non-empty counts as having thinking. usage.*_tokens is no longer used as a decision basis (vendor implementations vary too much).
 
-    返回 dict 含:
-      - has_think_tag (bool): content 里是否含 <think> 标签
-      - reasoning_content (str): 思考正文(已合并两种字段)
-      - any (bool): 任一信号命中
+    Returns a dict with:
+      - has_think_tag (bool): whether content contains a <think> tag
+      - reasoning_content (str): the thinking body (already merged from both fields)
+      - any (bool): whether any signal hit
     """
     if result.get("stream"):
         msg = _stream_choice_message(result)
@@ -921,7 +922,7 @@ def get_thinking_signals(result: dict) -> dict:
 
 
 def assert_thinking_present(result: dict, msg: str = ""):
-    """断言响应里有思考信号(<think> 标签 或 reasoning_content/reasoning 非空)"""
+    """Assert that the response contains a thinking signal (a <think> tag or non-empty reasoning_content/reasoning)."""
     sig = get_thinking_signals(result)
     assert sig["any"], (
         f"{msg}: expected thinking present, but no signal found.\n"
@@ -931,7 +932,7 @@ def assert_thinking_present(result: dict, msg: str = ""):
 
 
 def assert_thinking_absent(result: dict, msg: str = ""):
-    """断言响应里没有思考信号(disabled 模式应满足)"""
+    """Assert that the response contains no thinking signal (should hold in disabled mode)."""
     sig = get_thinking_signals(result)
     assert not sig["any"], (
         f"{msg}: expected no thinking, but found signal.\n"
@@ -941,9 +942,9 @@ def assert_thinking_absent(result: dict, msg: str = ""):
 
 
 def get_oai_content(result):
-    """聚合 OAI 响应的 message.content(流式 = delta.content 累加)。
+    """Aggregate message.content from an OAI response (stream = sum of delta.content).
 
-    防御性处理:流式末尾常见纯 usage chunk(choices=[]),不取 [0] 否则 IndexError。
+    Defensive handling: streams commonly end with a pure-usage chunk (choices=[]); do not index [0] or it raises IndexError.
     """
     if result.get("stream"):
         parts = []
@@ -963,25 +964,25 @@ def get_oai_content(result):
 
 
 # --------------- Tool call extraction & assertions ---------------
-# spec 1.8.1 tools 列表结构 + function.parameters 推荐格式
-# 所有"触发型"toolcall case 通过这套工具断言:
-#   - 模型确实调用了期望工具(name 匹配)
-#   - arguments 是合法 JSON
-#   - arguments 字段值与 prompt/定义预期一致(可选子集匹配)
-# 流式响应需要按 OAI delta.tool_calls 协议 rebuild
+# spec 1.8.1 tools list structure + function.parameters recommended format
+# All "trigger-type" toolcall cases use this toolkit for assertions:
+#   - The model actually called the expected tool (name matches)
+#   - arguments is valid JSON
+#   - arguments field values match prompt/definition expectations (optional subset match)
+# Streaming responses need to be rebuilt according to the OAI delta.tool_calls protocol
 
 def get_tool_calls(result: dict) -> list:
-    """从 oai_chat 返回里抽 tool_calls 列表(流式/非流式都兼容)。
+    """Extract the tool_calls list from an oai_chat return (both streaming and non-streaming compatible).
 
-    返回 [{"id": str, "name": str, "arguments_raw": str, "arguments_obj": dict|None}, ...]
-    arguments_obj 为 None 表示无法解析为 JSON(也是断言失败信号)
+    Returns [{"id": str, "name": str, "arguments_raw": str, "arguments_obj": dict|None}, ...]
+    arguments_obj being None means it could not be parsed as JSON (also a signal of assertion failure).
     """
-    raw_calls = []  # [{"id", "name", "arguments"}] 中间形态
+    raw_calls = []  # [{"id", "name", "arguments"}] intermediate form
 
     if result.get("stream"):
-        # 流式:按 OAI delta.tool_calls 协议 rebuild
-        # delta 里 tool_calls 是 [{"index": i, "id": ..., "function": {"name": ..., "arguments": "片段"}}]
-        # 同一 index 的 arguments 字符串需拼接;id 一般首次出现
+        # Streaming: rebuild per OAI delta.tool_calls protocol
+        # In delta, tool_calls is [{"index": i, "id": ..., "function": {"name": ..., "arguments": "fragment"}}]
+        # arguments strings at the same index need to be concatenated; id usually appears the first time
         partials = {}  # index -> {"id": str, "name": str, "arguments": str}
         for chunk in result.get("chunks") or []:
             choices = chunk.get("choices") or []
@@ -992,10 +993,10 @@ def get_tool_calls(result: dict) -> list:
                 idx = tc.get("index", 0)
                 slot = partials.setdefault(idx, {"id": "", "name": "", "arguments": ""})
                 if tc.get("id"):
-                    slot["id"] = tc["id"]  # id 出现一次即可,以后置覆盖
+                    slot["id"] = tc["id"]  # id appears once; later occurrences overwrite
                 fn = tc.get("function") or {}
                 if fn.get("name"):
-                    slot["name"] += fn["name"]  # 部分实现 name 也分片
+                    slot["name"] += fn["name"]  # some implementations also fragment the name
                 if fn.get("arguments") is not None:
                     slot["arguments"] += fn["arguments"]
         for idx in sorted(partials):
@@ -1014,7 +1015,7 @@ def get_tool_calls(result: dict) -> list:
                 "arguments": fn.get("arguments") or "",
             })
 
-    # 解析 arguments JSON
+    # Parse arguments JSON
     parsed = []
     for c in raw_calls:
         args_raw = c.get("arguments") or ""
@@ -1034,15 +1035,15 @@ def get_tool_calls(result: dict) -> list:
 
 
 def _value_loosely_equal(actual, expected) -> bool:
-    """字段值的宽松匹配:
-    - 字符串大小写不敏感 + 去首尾空格 + 容忍包含关系(actual contains expected 或反之)
-    - 数字类型互相兼容(int/float)
-    - bool/list/dict 严格相等
-    用于断言 prompt 里说 'Beijing' 但模型可能给 '北京'/'beijing'/'Beijing, China' 的场景。
+    """Loose match for field values:
+    - Strings: case-insensitive + strip leading/trailing spaces + tolerate containment (actual contains expected or vice versa)
+    - Numeric types are interchangeable (int/float)
+    - bool/list/dict require strict equality
+    Used for scenarios where the prompt says 'Beijing' but the model may return '北京'/'beijing'/'Beijing, China'.
     """
     if expected is None:
         return actual is None
-    if isinstance(expected, bool):  # bool 必须先于 int 判断(True 是 int)
+    if isinstance(expected, bool):  # bool must be checked before int (True is an int)
         return actual == expected
     if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
         return abs(actual - expected) < 1e-9
@@ -1058,12 +1059,12 @@ def _value_loosely_equal(actual, expected) -> bool:
 
 
 def _expected_types_for(param_schema: dict) -> tuple:
-    """把 JSON Schema 的 type 映射成 Python 类型元组,供 isinstance 用。
-    支持单 type 字符串或 type 数组(spec 1.8.1 推荐 type:["string","number",...])
+    """Map JSON Schema type into a tuple of Python types, for use with isinstance.
+    Supports a single type string or an array of types (spec 1.8.1 recommends type:["string","number",...])
     """
     type_field = param_schema.get("type")
     if not type_field:
-        return (object,)  # 无 type 约束,放行任何类型
+        return (object,)  # No type constraint, allow any type
     if isinstance(type_field, str):
         types = [type_field]
     else:
@@ -1094,19 +1095,19 @@ def _expected_types_for(param_schema: dict) -> tuple:
 
 
 def _validate_schema(args, schema: dict, path: str, msg: str):
-    """递归校验 args 是否符合 JSON Schema 子集(type/required/properties/items/enum/min/max)。
+    """Recursively validate args against a JSON Schema subset (type/required/properties/items/enum/min/max).
 
-    支持的关键字:
-      - type (单值或数组,见 _expected_types_for)
-      - required (object 强制字段)
-      - properties (object 字段递归)
-      - items (array 元素递归)
-      - enum (任意值的枚举校验)
-      - minimum / maximum (number/integer 范围)
-      - minLength / maxLength (string 长度)
-      - minItems / maxItems (array 长度)
+    Supported keywords:
+      - type (single value or array; see _expected_types_for)
+      - required (mandatory fields on objects)
+      - properties (recurse into object fields)
+      - items (recurse into array elements)
+      - enum (enum check for any value)
+      - minimum / maximum (number/integer range)
+      - minLength / maxLength (string length)
+      - minItems / maxItems (array length)
 
-    断言失败时通过 path 定位具体字段(如 "passengers[0].name")。
+    On assertion failure, `path` pinpoints the specific field (e.g. "passengers[0].name").
     """
     # 1. type
     expected_types = _expected_types_for(schema)
@@ -1125,7 +1126,7 @@ def _validate_schema(args, schema: dict, path: str, msg: str):
             f"  enum={allowed}  actual={args!r}"
         )
 
-    # 3. number/integer 范围
+    # 3. number/integer range
     if isinstance(args, (int, float)) and not isinstance(args, bool):
         if "minimum" in schema:
             assert args >= schema["minimum"], (
@@ -1136,7 +1137,7 @@ def _validate_schema(args, schema: dict, path: str, msg: str):
                 f"{msg}: {path}={args} above maximum {schema['maximum']}"
             )
 
-    # 4. string 长度
+    # 4. string length
     if isinstance(args, str):
         if "minLength" in schema:
             assert len(args) >= schema["minLength"], (
@@ -1181,15 +1182,15 @@ def assert_tool_called(result: dict,
                        expected_args_subset: dict = None,
                        schema: dict = None,
                        msg: str = ""):
-    """断言模型至少调用了一个工具,可选校验:
-      - expected_name: str 或 list[str]。str 时第一个 tool_call.name 必须匹配;
-        list 时第一个 tool_call.name 必须 ∈ list(用于"模型可能选其中之一"场景)
-      - expected_args_subset: arguments_obj 应包含这些字段(值用 _value_loosely_equal)
-      - schema: function.parameters JSON Schema,递归校验:
+    """Assert the model called at least one tool, with optional validations:
+      - expected_name: str or list[str]. When str, the first tool_call.name must match;
+        when list, the first tool_call.name must be ∈ list (for "the model may pick one of them" scenarios)
+      - expected_args_subset: arguments_obj should contain these fields (values compared via _value_loosely_equal)
+      - schema: function.parameters JSON Schema, validated recursively:
           * required / properties / items / enum / minimum / maximum / minLength / maxLength
-          * 嵌套 object 与 array 的字段都会被深度递归
+          * Nested object and array fields are recursed deeply
 
-    断言失败时打印 raw + parsed,方便定位"调了但 JSON 坏 / 字段类型不对 / 调错工具"。
+    On assertion failure, prints raw + parsed to help diagnose "called but JSON broken / wrong field types / wrong tool".
     """
     calls = get_tool_calls(result)
     assert calls, (
@@ -1210,7 +1211,7 @@ def assert_tool_called(result: dict,
                 f"{msg}: expected tool name {expected_name!r}, got {call['name']!r}\n"
                 f"  arguments_raw={call['arguments_raw'][:300]}"
             )
-    # arguments JSON 解析必须成功
+    # arguments JSON parsing must succeed
     assert call["arguments_obj"] is not None, (
         f"{msg}: arguments is not valid JSON.\n"
         f"  raw={call['arguments_raw'][:500]}"
@@ -1233,11 +1234,11 @@ def assert_tool_called(result: dict,
 
 
 def assert_tools_called_set(result: dict, expected_names, schemas: dict = None, msg: str = ""):
-    """断言模型调用了集合内所有 name(顺序不限,允许超出),用于多工具并行场景。
-      - expected_names: list/set[str] 期望全部出现的 name
-      - schemas: dict[str -> schema] 可选,按 name 校验对应 args
+    """Assert the model called every name in the set (any order, extras allowed), for multi-tool parallel scenarios.
+      - expected_names: list/set[str] of names that must all appear
+      - schemas: optional dict[str -> schema] to validate the corresponding args by name
 
-    比 assert_tool_called 更严:expected_names 必须全部出现,缺一即失败。
+    Stricter than assert_tool_called: every expected_name must appear; missing any one fails.
     """
     calls = get_tool_calls(result)
     assert calls, (
@@ -1252,7 +1253,7 @@ def assert_tools_called_set(result: dict, expected_names, schemas: dict = None, 
         f"  expected={expected_set}  actual={actual_names}\n"
         f"  missing={missing}"
     )
-    # arguments 必须合法 JSON
+    # arguments must be valid JSON
     for c in calls:
         assert c["arguments_obj"] is not None, (
             f"{msg}: tool {c['name']!r} arguments not valid JSON.\n"
@@ -1263,7 +1264,7 @@ def assert_tools_called_set(result: dict, expected_names, schemas: dict = None, 
 
 
 def assert_no_tool_called(result: dict, msg: str = ""):
-    """断言模型没有调用工具(用于 tool_choice='none' / 应回退聊天的场景)"""
+    """Assert the model did not call any tool (for tool_choice='none' / should-fall-back-to-chat scenarios)."""
     calls = get_tool_calls(result)
     assert not calls, (
         f"{msg}: expected no tool_call, but got {len(calls)}: "

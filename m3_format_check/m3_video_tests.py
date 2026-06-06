@@ -1,29 +1,29 @@
 """
-M3 API Test — 视频模态 case 集合
+M3 API Test — video modality case suite
 
-按"校验内容"分模块组织,case 命名规范:
-    test_<模块编号>_<模块内顺序编号>_<场景说明>
+Organized into modules by "what is being validated"; case naming convention:
+    test_<module_number>_<within_module_order>_<scenario_description>
 
-模块编号 / 主题:
-    01  base64_video          base64 视频基础接受性
-    02  url_video             URL 视频接受性
-    03  video_format          视频容器/MIME 格式(MOV/MKV/AVI 等)
-    04  multi_video           多段视频叠加 / 数量上限
-    05  image_video_mixed     图 + 视频混合 message
-    06  fps_param             fps 合法档位 与 越界
-    07  detail_param          detail / fps 字段缺省与组合
-    08  resolution_tier       分辨率档位 / 边界 / 像素上限
-    09  max_long_side_pixel   max_long_side_pixel(28 倍数)契约
-    10  video_size_limit      视频大小限(≤50MB)
-    11  long_video            长视频(5/10/20/30 min)
-    12  media_gradient        分辨率梯度 / 多视频梯度
-    13  video_extension       reasoning_split 等扩展字段
-    14  error_codes           视频相关错误码
+Module number / topic:
+    01  base64_video          base64 video basic acceptance
+    02  url_video             URL video acceptance
+    03  video_format          video container/MIME format (MOV/MKV/AVI, etc.)
+    04  multi_video           multi-video stacking / count upper bound
+    05  image_video_mixed     image + video mixed message
+    06  fps_param             fps valid tiers and out-of-range
+    07  detail_param          detail / fps field defaults and combinations
+    08  resolution_tier       resolution tier / boundary / pixel cap
+    09  max_long_side_pixel   max_long_side_pixel (multiple of 28) contract
+    10  video_size_limit      video size limit (<=50MB)
+    11  long_video            long video (5/10/20/30 min)
+    12  media_gradient        resolution gradient / multi-video gradient
+    13  video_extension       reasoning_split and other extension fields
+    14  error_codes           video-related error codes
 
-模态优先级 video > image > text,本文件含视频(含图片+视频的混合归本文件)。
+Modality priority video > image > text; this file covers video (mixed image+video also lives here).
 
-所有 case 透过 helpers.oai_chat() 走 /v1/chat/completions,jsonl 落
-RUN_LOG_PATH(由 conftest 注入)。
+All cases go through helpers.oai_chat() to /v1/chat/completions; jsonl is
+written to RUN_LOG_PATH (injected by conftest).
 """
 import base64
 import os
@@ -40,8 +40,8 @@ from image_tools import (
 
 
 # ============================================================
-# 本文件局部 helper:真实视频 fixture 读取
-# (避免污染 helpers.py / 与 M3 团队参考实现的 real_video_b64 同名同义)
+# File-local helpers: real video fixture loaders
+# (avoid polluting helpers.py / shares name+semantics with the M3 team reference implementation's real_video_b64)
 # ============================================================
 
 _REAL_VIDEO_DIR = Path(__file__).parent / "fixtures" / "m3_test_videos"
@@ -49,13 +49,13 @@ _REAL_IMAGE_DIR = Path(__file__).parent / "fixtures" / "m3_test_images" / "real"
 
 
 def real_video_b64(name: str = "real_2s.mp4", mime: str = "video/mp4") -> str:
-    """读取 fixtures/m3_test_videos/<name> → base64 data URL。
+    """Read fixtures/m3_test_videos/<name> -> base64 data URL.
 
-    与 m3_image_tests.py:real_image_b64 同套语义。常用 fixture:
-      - real_2s.mp4     (~104KB,P09/P14 内容理解 case)
-      - 12s_real.mp4    (~628KB,06 fps 合法档位 12 秒视频)
-      - flower-video.mp4 (~1MB,图+视频混合 case 第二段)
-      - test_video.mov / .mkv / .avi (~160KB,03 模块真实非 MP4 格式 smoke)
+    Same semantics as m3_image_tests.py:real_image_b64. Common fixtures:
+      - real_2s.mp4     (~104KB, P09/P14 content understanding cases)
+      - 12s_real.mp4    (~628KB, 06 fps valid-tier 12-second video)
+      - flower-video.mp4 (~1MB, second clip for image+video mixed cases)
+      - test_video.mov / .mkv / .avi (~160KB, 03 module real non-MP4 format smoke)
     """
     path = _REAL_VIDEO_DIR / name
     if not path.exists():
@@ -67,9 +67,9 @@ def real_video_b64(name: str = "real_2s.mp4", mime: str = "video/mp4") -> str:
 
 
 def real_image_b64_for_video(name: str = "sx1.jpg", mime: str = "image/jpeg") -> str:
-    """读 fixtures/m3_test_images/real/<name> 的本地副本,供视频文件里的图+视频混合 case 用。
+    """Read a local copy of fixtures/m3_test_images/real/<name>, used by image+video mixed cases inside the video file.
 
-    与 m3_image_tests.py:real_image_b64 隔离,避免跨文件 import。
+    Kept isolated from m3_image_tests.py:real_image_b64 to avoid cross-file imports.
     """
     path = _REAL_IMAGE_DIR / name
     if not path.exists():
@@ -80,9 +80,9 @@ def real_image_b64_for_video(name: str = "sx1.jpg", mime: str = "image/jpeg") ->
     return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
 
 
-# 长视频(>10MB)优先从 M3_LONG_VIDEO_DIR 环境变量指定的目录读取;
-# 未设置时 fallback 到本地 fixtures/m3_test_videos/(D_300s/D_600s/D_1200s/D_1800s.mp4 已入仓)。
-# 例如:export M3_LONG_VIDEO_DIR=/Users/minimax/Downloads/M3/assets/videos/duration
+# Long videos (>10MB) are loaded preferentially from the directory specified by M3_LONG_VIDEO_DIR;
+# when unset, fall back to local fixtures/m3_test_videos/ (D_300s/D_600s/D_1200s/D_1800s.mp4 committed).
+# Example: export M3_LONG_VIDEO_DIR=/Users/minimax/Downloads/M3/assets/videos/duration
 _LONG_VIDEO_DIR_ENV = "M3_LONG_VIDEO_DIR"
 _LOCAL_LONG_DIR = Path(__file__).parent / "fixtures" / "m3_test_videos"
 
@@ -105,7 +105,7 @@ def long_video_b64(name: str, mime: str = "video/mp4") -> str:
 
 
 def _get_prompt_tokens(r: dict) -> int:
-    """从 oai_chat 返回里抽 prompt_tokens(stream / non_stream 都兼容)"""
+    """Extract prompt_tokens from an oai_chat response (compatible with stream / non_stream)."""
     if not r.get("stream"):
         body = r.get("body") or {}
         return (body.get("usage") or {}).get("prompt_tokens", 0)
@@ -117,7 +117,7 @@ def _get_prompt_tokens(r: dict) -> int:
 
 
 def _assert_basic_ok(r: dict, msg: str = ""):
-    """档位合法路径的基础断言:HTTP 200 + prompt_tokens 为正数"""
+    """Basic assertion for the happy-path of a valid tier: HTTP 200 + positive prompt_tokens."""
     assert r["status"] == 200, (
         f"{msg}: expected 200, got {r['status']}: "
         f"{r.get('body', '')[:300] if isinstance(r.get('body'), str) else r.get('body')}"
@@ -128,7 +128,7 @@ def _assert_basic_ok(r: dict, msg: str = ""):
 
 def _video_payload(filename: str, detail: str = None, fps: float = None,
                    text: str = "What is this?") -> dict:
-    """构造视频请求的 video_url 块"""
+    """Build the video_url block for a video request."""
     video_url_obj = {"url": fixture_video_base64(filename)}
     if detail is not None:
         video_url_obj["detail"] = detail
@@ -142,7 +142,7 @@ def _video_payload(filename: str, detail: str = None, fps: float = None,
     }
 
 
-# 多个模块共用的真实素材标记(春节卡通小马,5MB)
+# Real-asset marker shared across multiple modules (Spring Festival cartoon pony, 5MB)
 PONY_VIDEO_FIXTURE = "476117246902419462.mp4"
 PONY_VIDEO_URL = (
     "https://qa-tool-1315599187.cos.ap-shanghai.myqcloud.com/m3-test/"
@@ -151,14 +151,14 @@ PONY_VIDEO_URL = (
 
 
 # ============================================================
-# 01 base64_video — base64 视频基础接受性
+# 01 base64_video — base64 video basic acceptance
 # ============================================================
 
 class TestBase64Video:
-    """base64 dataURL 形式喂视频:验最小可用路径 + 真实素材内容理解。"""
+    """Feed video via base64 dataURL: verify minimum viable path + real-asset content understanding."""
 
     def test_01_01_base64_video(self):
-        """base64 最小 MP4 + What do you see → HTTP 200 + 非空回答。"""
+        """Minimal base64 MP4 + What do you see -> HTTP 200 + non-empty answer."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": mp4_base64()}},
@@ -173,7 +173,7 @@ class TestBase64Video:
         )
 
     def test_01_02_base64_real_pony_cartoon(self):
-        """真实素材(春节卡通小马 5MB)base64 输入,验内容理解 + content > 50。"""
+        """Real asset (Spring Festival cartoon pony, 5MB) base64 input: verify content understanding + content > 50."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -194,14 +194,14 @@ class TestBase64Video:
 
 
 # ============================================================
-# 02 url_video — URL 视频接受性
+# 02 url_video — URL video acceptance
 # ============================================================
 
 class TestURLVideo:
-    """video_url.url 走公网/COS URL 形式。"""
+    """video_url.url uses public network / COS URL form."""
 
     def test_02_01_url_video(self):
-        """公网示例 mp4 URL → HTTP 200 + 非空回答(基础 URL 接受性)。"""
+        """Public sample mp4 URL -> HTTP 200 + non-empty answer (basic URL acceptance)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": SAMPLE_VIDEO_URL}},
@@ -216,7 +216,7 @@ class TestURLVideo:
         )
 
     def test_02_02_url_real_pony_cartoon(self):
-        """真实素材(春节卡通小马)经 OSS URL 输入,验内容理解 + content > 50。"""
+        """Real asset (Spring Festival cartoon pony) via OSS URL input: verify content understanding + content > 50."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": PONY_VIDEO_URL}},
@@ -235,14 +235,14 @@ class TestURLVideo:
 
 
 # ============================================================
-# 03 video_format — 视频容器/MIME 格式(MOV/MKV/AVI 等)
+# 03 video_format — video container/MIME format (MOV/MKV/AVI, etc.)
 # ============================================================
 
 class TestVideoFormat:
-    """视频格式兼容性 — 含伪装 MIME(MOV/MKV/AVI 等)与真实非 MP4 文件 smoke。"""
+    """Video format compatibility — includes disguised MIME (MOV/MKV/AVI, etc.) and real non-MP4 file smoke."""
 
     def test_03_01_mkv_format_legacy(self):
-        """MKV(video/x-matroska)用最小 mp4 伪装 → 已知不支持时 xfail。"""
+        """MKV (video/x-matroska) disguised with minimal mp4 -> xfail when known unsupported."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -256,7 +256,7 @@ class TestVideoFormat:
             pytest.xfail("Known BUG: MKV format not supported")
 
     def test_03_02_mov_format_video_quicktime(self):
-        """MOV(video/quicktime base64)→ 已知 BUG-7 时 xfail。"""
+        """MOV (video/quicktime base64) -> xfail when known BUG-7."""
         mov_b64 = ("data:video/quicktime;base64,"
                    + base64.b64encode(make_minimal_mp4_504()).decode())
         r = oai_chat({
@@ -269,7 +269,7 @@ class TestVideoFormat:
             pytest.xfail("Known BUG-7: MOV format not supported")
 
     def test_03_03_mov_format_video_mov(self):
-        """MOV(spec 1.3.5 要求 data:video/mov;base64,...)→ 已知 BUG-7 时 xfail。"""
+        """MOV (spec 1.3.5 requires data:video/mov;base64,...) -> xfail when known BUG-7."""
         mov_b64 = ("data:video/mov;base64,"
                    + base64.b64encode(make_minimal_mp4_504()).decode())
         r = oai_chat({
@@ -282,7 +282,7 @@ class TestVideoFormat:
             pytest.xfail("Known BUG-7: MOV format not supported")
 
     def test_03_04_mkv_format_video_matroska(self):
-        """MKV(video/x-matroska)用最小 mp4 伪装 → 已知 BUG-7 时 xfail。"""
+        """MKV (video/x-matroska) disguised with minimal mp4 -> xfail when known BUG-7."""
         mkv_b64 = ("data:video/x-matroska;base64,"
                    + base64.b64encode(make_minimal_mp4_504()).decode())
         r = oai_chat({
@@ -297,7 +297,7 @@ class TestVideoFormat:
     @pytest.mark.parametrize("mime", ["video/avi", "video/x-msvideo"],
                              ids=["video_avi", "video_x_msvideo"])
     def test_03_05_avi_format(self, mime):
-        """AVI 两个合法 MIME(video/avi / video/x-msvideo)用最小 mp4 伪装 → 不支持时 xfail。"""
+        """Both valid MIME variants of AVI (video/avi / video/x-msvideo) disguised with minimal mp4 -> xfail when unsupported."""
         avi_b64 = f"data:{mime};base64," + base64.b64encode(make_minimal_mp4_504()).decode()
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -309,7 +309,7 @@ class TestVideoFormat:
             pytest.xfail(f"AVI format with MIME={mime} not supported / fixture is mp4 data")
 
     def test_03_06_real_mov_smoke(self):
-        """真实 MOV 文件(fixtures/test_video.mov)默认 detail/fps → 接受或合法拒绝。"""
+        """Real MOV file (fixtures/test_video.mov) with default detail/fps -> accept or valid reject."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -324,7 +324,7 @@ class TestVideoFormat:
         )
 
     def test_03_07_real_avi_smoke(self):
-        """真实 AVI 文件(fixtures/test_video.avi)默认 detail/fps → 接受或合法拒绝。"""
+        """Real AVI file (fixtures/test_video.avi) with default detail/fps -> accept or valid reject."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -339,7 +339,7 @@ class TestVideoFormat:
         )
 
     def test_03_08_real_mkv_smoke(self):
-        """真实 MKV 文件(fixtures/test_video.mkv)默认 detail/fps → 接受或合法拒绝。"""
+        """Real MKV file (fixtures/test_video.mkv) with default detail/fps -> accept or valid reject."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -355,12 +355,12 @@ class TestVideoFormat:
 
 
 # ============================================================
-# 04 multi_video — 多段视频叠加 / 数量上限
+# 04 multi_video — multi-video stacking / count upper bound
 # ============================================================
 
 class TestMultiVideo:
-    """spec 1.3.6 (更新版) 视频数量上限 20 段 + 多段叠加边界覆盖。
-    20 段 base64 会撑爆请求体,边界 case 改用 URL 形式 (fixture_video_url)。"""
+    """spec 1.3.6 (updated) video count upper bound 20 + multi-clip stacking boundary coverage.
+    20 base64 clips would blow up the request body; boundary cases switch to URL form (fixture_video_url)."""
 
     def _mp4_block(self):
         return {"type": "video_url", "video_url": {
@@ -369,15 +369,15 @@ class TestMultiVideo:
         }}
 
     def _mp4_url_block(self):
-        """单段 video_400x300.mp4 (COS 直链) 的 URL 形式 video_url 块。
-        用最小分辨率减小网关下载压力。
+        """A URL-form video_url block for a single video_400x300.mp4 (COS direct link).
+        Uses the minimum resolution to reduce gateway download pressure.
         """
         return {"type": "video_url", "video_url": {
             "url": fixture_video_url("video_400x300.mp4"),
         }}
 
     def test_04_01_count_at_max(self):
-        """20 段视频 URL(spec 更新版上限)→ 接口应接受(HTTP 200)。"""
+        """20 video URLs (spec updated upper bound) -> the endpoint should accept (HTTP 200)."""
         content = [self._mp4_url_block() for _ in range(20)]
         content.append({"type": "text", "text": "How many videos do you see?"})
         r = oai_chat({"messages": [{"role": "user", "content": content}]}, timeout=600)
@@ -387,10 +387,10 @@ class TestMultiVideo:
         )
 
     def test_04_02_count_over_max(self):
-        """21 段视频 URL(> spec 更新版上限 20)→ 4xx 直接拒绝 OR 200 + 非空响应。
-        反例:HTTP 200 但 content 为空(模型未给出任何文字回复)。
-        实测官方 M3 返回 400 `the num of video is larger than the limit: 20`(强制拦截);
-        部分供应商可能放过,允许 200 + 有内容亦视为合规(贴齐 image 12_02 的写法)。
+        """21 video URLs (> spec updated upper bound 20) -> 4xx outright reject OR 200 + non-empty response.
+        Counter-example: HTTP 200 but content is empty (model produced no textual reply).
+        Empirically the official M3 returns 400 `the num of video is larger than the limit: 20` (hard block);
+        some providers may let it through; 200 + content is also considered compliant (aligned with image 12_02).
         """
         content = [self._mp4_url_block() for _ in range(21)]
         content.append({"type": "text", "text": "How many?"})
@@ -411,7 +411,7 @@ class TestMultiVideo:
 
     @pytest.mark.slow
     def test_04_03_multi_video_3(self):
-        """3 段 real_2s.mp4 真实视频叠加,允许 200/4xx。"""
+        """3 stacked real_2s.mp4 real videos; allow 200/4xx."""
         vid = real_video_b64("real_2s.mp4")
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -429,7 +429,7 @@ class TestMultiVideo:
 
     @pytest.mark.slow
     def test_04_04_multi_video_5(self):
-        """5 段 real_2s.mp4 真实视频叠加(spec 上限),允许 200/4xx。"""
+        """5 stacked real_2s.mp4 real videos (spec upper bound); allow 200/4xx."""
         vid = real_video_b64("real_2s.mp4")
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -444,9 +444,9 @@ class TestMultiVideo:
         )
 
     def test_04_05_multi_video_b64_url_mix(self):
-        """混合形态:base64 + URL 两段不同载入形态的多视频,允许 200/4xx。
+        """Mixed form: two clips loaded via different input forms, base64 + URL; allow 200/4xx.
 
-        与 04_01..04_04 的"全 base64 同段"覆盖不同的输入形态。
+        Different input-form coverage from the "all-base64 same-clip" cases in 04_01..04_04.
         """
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -462,14 +462,14 @@ class TestMultiVideo:
 
 
 # ============================================================
-# 05 image_video_mixed — 图 + 视频混合 message
+# 05 image_video_mixed — image + video mixed message
 # ============================================================
 
 class TestImageVideoMixed:
-    """同 message 内含图 + 视频的混合 multimodal 输入。"""
+    """Mixed multimodal input with images + videos in the same message."""
 
     def test_05_01_one_image_one_video(self):
-        """1 图(PNG)+ 1 视频(real_2s) → HTTP 200(多模态混合)。"""
+        """1 image (PNG) + 1 video (real_2s) -> HTTP 200 (multimodal mix)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": png_base64()}},
@@ -485,7 +485,7 @@ class TestImageVideoMixed:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_05_02_image_video_stream_variant(self, stream):
-        """图+视频混合 → 非流式/流式两路均应 200。"""
+        """Image + video mixed -> both non-stream and stream paths should return 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": png_base64()}},
@@ -501,7 +501,7 @@ class TestImageVideoMixed:
 
     @pytest.mark.slow
     def test_05_03_mixed_3img_1vid(self):
-        """3 真图(sx1×3) + 1 真实视频(real_2s) 混合 → 允许 200/4xx。"""
+        """3 real images (sx1 x3) + 1 real video (real_2s) mix -> allow 200/4xx."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": real_image_b64_for_video("sx1.jpg", "image/jpeg")}},
@@ -519,7 +519,7 @@ class TestImageVideoMixed:
 
     @pytest.mark.slow
     def test_05_04_mixed_1img_2vid(self):
-        """1 真图(sx1) + 2 真实视频(real_2s + flower-video) 混合 → 允许 200/4xx。"""
+        """1 real image (sx1) + 2 real videos (real_2s + flower-video) mix -> allow 200/4xx."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": real_image_b64_for_video("sx1.jpg", "image/jpeg")}},
@@ -536,15 +536,15 @@ class TestImageVideoMixed:
 
 
 # ============================================================
-# 06 fps_param — fps 合法档位 与 越界
+# 06 fps_param — fps valid tiers and out-of-range
 # ============================================================
 
 class TestFpsParam:
-    """fps ∈ [0.2, 5] 合法档位 与 越界拒绝行为。"""
+    """fps in [0.2, 5] valid tiers and out-of-range reject behavior."""
 
     @pytest.mark.parametrize("fps", [0.5, 1, 2], ids=["fps=0.5", "fps=1", "fps=2"])
     def test_06_01_fps_real_video(self, fps):
-        """fps ∈ {0.5, 1, 2} 用 12s_real.mp4 真实视频 → HTTP 200。"""
+        """fps in {0.5, 1, 2} on 12s_real.mp4 real video -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -562,7 +562,7 @@ class TestFpsParam:
     @pytest.mark.parametrize("fps", [0.5, 1.0, 2.0, 5.0],
                              ids=["fps=0.5", "fps=1.0", "fps=2.0", "fps=5.0"])
     def test_06_02_valid_fps(self, fps):
-        """合法 fps ∈ [0.2, 5] 各档,用 12s_real.mp4 → HTTP 200。"""
+        """Each valid fps in [0.2, 5] tier on 12s_real.mp4 -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -581,7 +581,7 @@ class TestFpsParam:
     @pytest.mark.parametrize("fps", [0.1, 0.0, -1, 10.0, 100],
                              ids=["fps=0.1", "fps=0", "fps=-1", "fps=10", "fps=100"])
     def test_06_03_invalid_fps(self, fps):
-        """越界值(< 0.2 或 > 5),服务端可能拒绝或宽松接受,软断言 200/400/422/500。"""
+        """Out-of-range values (< 0.2 or > 5); server may reject or leniently accept; soft assert 200/400/422/500."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -598,46 +598,46 @@ class TestFpsParam:
         )
 
     def test_06_04_fps_lower_boundary(self):
-        """fps=0.2(下界)→ HTTP 200 + prompt_tokens > 0。"""
+        """fps=0.2 (lower bound) -> HTTP 200 + prompt_tokens > 0."""
         r = oai_chat(_video_payload("video_640x480.mp4", detail="default", fps=0.2))
         _assert_basic_ok(r, "06_04 fps=0.2 lower boundary")
 
     def test_06_05_fps_upper_boundary(self):
-        """fps=5.0(上界)→ HTTP 200 + prompt_tokens > 0。"""
+        """fps=5.0 (upper bound) -> HTTP 200 + prompt_tokens > 0."""
         r = oai_chat(_video_payload("video_640x480.mp4", detail="default", fps=5.0))
         _assert_basic_ok(r, "06_05 fps=5.0 upper boundary")
 
     @pytest.mark.parametrize("fps", [0.1, 0.0, -1], ids=["0.1", "0.0", "-1"])
     def test_06_06_fps_below_min_short_fixture(self, fps):
-        """fps<0.2 用 video_640x480.mp4(短 fixture)→ 软断言 200/400/422,记录实际行为。
+        """fps<0.2 on video_640x480.mp4 (short fixture) -> soft assert 200/400/422; records actual behavior.
 
-        与 06_03 互补:06_03 用 12s_real.mp4(长视频)覆盖完整越界集合,
-        06_06 用短 fixture 单独覆盖下界附近的 3 个常见越界值,便于快速诊断。
+        Complements 06_03: 06_03 uses 12s_real.mp4 (long video) for full out-of-range coverage;
+        06_06 uses a short fixture to cover the 3 common out-of-range values near the lower bound for quick diagnosis.
         """
         r = oai_chat(_video_payload("video_640x480.mp4", detail="default", fps=fps))
         assert r["status"] in (200, 400, 422), f"06_06 fps={fps} HTTP={r['status']}"
 
     @pytest.mark.parametrize("fps", [5.1, 10, 1000], ids=["5.1", "10", "1000"])
     def test_06_07_fps_above_max_short_fixture(self, fps):
-        """fps>5 用 video_640x480.mp4(短 fixture)→ 软断言 200/400/422,记录实际行为。
+        """fps>5 on video_640x480.mp4 (short fixture) -> soft assert 200/400/422; records actual behavior.
 
-        与 06_03 互补:06_07 覆盖上界附近的 3 个常见越界值,短 fixture 便于快速诊断。
+        Complements 06_03: 06_07 covers the 3 common out-of-range values near the upper bound; short fixture for quick diagnosis.
         """
         r = oai_chat(_video_payload("video_640x480.mp4", detail="default", fps=fps))
         assert r["status"] in (200, 400, 422), f"06_07 fps={fps} HTTP={r['status']}"
 
 
 # ============================================================
-# 07 detail_param — detail / fps 字段缺省与组合
+# 07 detail_param — detail / fps field defaults and combinations
 # ============================================================
 
 class TestDetailParam:
-    """detail = low/default/high 三档接受性 + detail / fps 字段缺省组合。"""
+    """detail = low/default/high three-tier acceptance + detail / fps field default combinations."""
 
     @pytest.mark.parametrize("detail", ["low", "default", "high"],
                              ids=["detail=low", "detail=default", "detail=high"])
     def test_07_01_detail_value(self, detail):
-        """video_url.detail ∈ {low, default, high} → HTTP 200。"""
+        """video_url.detail in {low, default, high} -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -654,7 +654,7 @@ class TestDetailParam:
         )
 
     def test_07_02_no_detail_no_fps(self):
-        """不传 detail / 不传 fps,服务端走默认(detail=default, fps=1)→ HTTP 200。"""
+        """Omit both detail and fps; server uses defaults (detail=default, fps=1) -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -670,7 +670,7 @@ class TestDetailParam:
         )
 
     def test_07_03_no_detail_explicit_fps(self):
-        """只传 fps,不传 detail,服务端走默认 detail=default → HTTP 200。"""
+        """Only pass fps, omit detail; server uses default detail=default -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -687,7 +687,7 @@ class TestDetailParam:
         )
 
     def test_07_04_no_fps_explicit_detail(self):
-        """只传 detail,不传 fps,服务端走默认 fps=1 → HTTP 200。"""
+        """Only pass detail, omit fps; server uses default fps=1 -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -704,10 +704,10 @@ class TestDetailParam:
         )
 
     def test_07_05_max_long_side_pixel_baseline(self):
-        """max_long_side_pixel=504(28×18 最小档)+ real_2s.mp4 → HTTP 200(契约最小档冒烟)。
+        """max_long_side_pixel=504 (28x18 minimum tier) + real_2s.mp4 -> HTTP 200 (contract minimum-tier smoke).
 
-        # OAI 契约:max_long_side_pixel 必须为 28 的倍数(2026-06-02 由 M3 团队对齐)。
-        # 此 case 仅做最小档冒烟,系列契约/单调/越界完整覆盖在 §09 模块。
+        # OAI contract: max_long_side_pixel must be a multiple of 28 (aligned by the M3 team on 2026-06-02).
+        # This case only does a minimum-tier smoke; the full contract/monotonic/out-of-range coverage lives in module §09.
         """
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -726,59 +726,60 @@ class TestDetailParam:
 
 
 # ============================================================
-# 08 resolution_tier — 分辨率档位 / 边界 / 像素上限
+# 08 resolution_tier — resolution tier / boundary / pixel cap
 # ============================================================
 
 class TestResolutionTier:
-    """不同分辨率视频走 detail=default 缩放 + max_total_pixels 软上限。"""
+    """Videos at different resolutions go through detail=default scaling + max_total_pixels soft cap."""
 
     def test_08_01_tier_low_no_scale(self):
-        """400x300 视频(长边 400 < default 档 672)→ HTTP 200(不缩)。"""
+        """400x300 video (long side 400 < default tier 672) -> HTTP 200 (no scale)."""
         r = oai_chat(_video_payload("video_400x300.mp4", detail="default"))
         _assert_basic_ok(r, "08_01 small_video")
 
     def test_08_02_tier_low_scale_down(self):
-        """1280x720 视频(长边 1280 > default 档 672)→ 应每帧缩,HTTP 200。"""
+        """1280x720 video (long side 1280 > default tier 672) -> should scale per frame, HTTP 200."""
         r = oai_chat(_video_payload("video_1280x720.mp4", detail="default"))
         _assert_basic_ok(r, "08_02 medium_video")
 
     def test_08_03_tier_default_no_scale(self):
-        """640x480 视频(长边 640 < default 档 672)→ HTTP 200(不缩)。"""
+        """640x480 video (long side 640 < default tier 672) -> HTTP 200 (no scale)."""
         r = oai_chat(_video_payload("video_640x480.mp4", detail="default"))
         _assert_basic_ok(r, "08_03 below_default")
 
     def test_08_04_tier_default_scale_down(self):
-        """1920x1080 视频(长边 1920 > default 档 672)→ 应每帧缩,HTTP 200。"""
+        """1920x1080 video (long side 1920 > default tier 672) -> should scale per frame, HTTP 200."""
         r = oai_chat(_video_payload("video_1920x1080.mp4", detail="default"))
         _assert_basic_ok(r, "08_04 above_default")
 
     def test_08_05_tier_high_no_scale(self):
-        """1280x720 视频(长边 1280 > default 档 672)→ HTTP 200。"""
+        """1280x720 video (long side 1280 > default tier 672) -> HTTP 200."""
         r = oai_chat(_video_payload("video_1280x720.mp4", detail="default"))
         _assert_basic_ok(r, "08_05 medium_large_video")
 
     def test_08_06_tier_high_scale_down(self):
-        """3840x2160 视频(长边 3840 > default 档 672)→ 应每帧缩,HTTP 200。"""
+        """3840x2160 video (long side 3840 > default tier 672) -> should scale per frame, HTTP 200."""
         r = oai_chat(_video_payload("video_3840x2160.mp4", detail="default"))
         _assert_basic_ok(r, "08_06 large_video")
 
     def test_08_07_tier_at_boundary(self):
-        """1280x720 视频(长边 = default 档两倍)→ 边界软断言 HTTP 200。"""
+        """1280x720 video (long side = 2x default tier) -> boundary soft assert HTTP 200."""
         r = oai_chat(_video_payload("video_1280x720.mp4", detail="default"))
         _assert_basic_ok(r, "08_07 boundary")
 
     def test_08_08_tier_consistency(self):
-        """1920x1080 大视频 + default 档 → HTTP 200 + prompt_tokens > 0(基础冒烟)。"""
+        """1920x1080 large video + default tier -> HTTP 200 + prompt_tokens > 0 (basic smoke)."""
         r = oai_chat(_video_payload("video_1920x1080.mp4", detail="default"))
         assert r["status"] == 200, f"08_08 HTTP={r['status']}"
         pt = _get_prompt_tokens(r)
         assert pt > 0, f"08_08 prompt_tokens={pt}"
 
     def test_08_09_max_total_pixels_exceeded(self):
-        """1 秒 3840x2160 + fps=5,逼近 max_total_pixels=301,056,000 软上限 → 200/4xx。
+        """1-second 3840x2160 + fps=5, approaching the max_total_pixels=301,056,000 soft cap -> 200/4xx.
 
-        # 当前 fixtures 都是 1 秒视频不足以真正触发上限,仅做"高 fps 大分辨率"接受性
-        # 断言;真正超限测试需更长时长 fixture。
+        # Current fixtures are all 1-second videos and cannot truly trigger the cap; this only
+        # asserts acceptance of "high fps + large resolution"; a true over-limit test needs a
+        # longer-duration fixture.
         """
         r = oai_chat(_video_payload("video_3840x2160.mp4", detail="default", fps=5))
         assert r["status"] in (200, 400, 413, 422), (
@@ -787,14 +788,14 @@ class TestResolutionTier:
 
 
 # ============================================================
-# 09 max_long_side_pixel — max_long_side_pixel(28 倍数)契约
+# 09 max_long_side_pixel — max_long_side_pixel (multiple of 28) contract
 # ============================================================
-# OAI 契约:max_long_side_pixel 必须为 28 的倍数(2026-06-02 由 M3 团队对齐)。
-# 视频三档采用 504(28×18) / 1008(28×36) / 2016(28×72),
-# 旧的 (504, 672, 1280) 组合里 672/1280 不是 28 的倍数,已废弃。
+# OAI contract: max_long_side_pixel must be a multiple of 28 (aligned by the M3 team on 2026-06-02).
+# Video three tiers use 504 (28x18) / 1008 (28x36) / 2016 (28x72);
+# the legacy (504, 672, 1280) combination had 672/1280 not multiples of 28 and is deprecated.
 
 class TestMaxLongSidePixel:
-    """max_long_side_pixel 三档(504/1008/2016)契约 + 单调 + 越界软断言。"""
+    """max_long_side_pixel three tiers (504/1008/2016) contract + monotonicity + out-of-range soft assert."""
 
     @pytest.mark.parametrize("mlsp,tier", [
         (504, "low"),
@@ -802,7 +803,7 @@ class TestMaxLongSidePixel:
         (2016, "high"),
     ], ids=["low=504", "default=1008", "high=2016"])
     def test_09_01_tier_value(self, mlsp, tier):
-        """三档(504/1008/2016)各档喂 3840x2160 真实视频(长边 > 2016,均触发缩放)→ HTTP 200 + prompt_tokens > 0。"""
+        """Each of the three tiers (504/1008/2016) fed with the 3840x2160 real video (long side > 2016, all trigger scaling) -> HTTP 200 + prompt_tokens > 0."""
         fixture_name = "video_3840x2160.mp4"
         video_url_obj = {
             "url": fixture_video_base64(fixture_name),
@@ -817,7 +818,7 @@ class TestMaxLongSidePixel:
         _assert_basic_ok(r, f"09_01 tier={tier} mlsp={mlsp} [{fixture_name}]")
 
     def test_09_02_monotonic(self):
-        """同视频分别设三档,prompt_tokens 严格单调 504 < 1008 < 2016。"""
+        """Same video with each of the three tiers set; prompt_tokens strictly monotonic 504 < 1008 < 2016."""
         fixture_name = "video_3840x2160.mp4"
         fixture_url = fixture_video_base64(fixture_name)
         tokens = {}
@@ -841,7 +842,7 @@ class TestMaxLongSidePixel:
     @pytest.mark.parametrize("invalid_value", [140, 3612, 0, -28],
                              ids=["below_min_28x5", "above_max_28x129", "zero", "negative_28"])
     def test_09_03_out_of_range(self, invalid_value):
-        """[150, 3584] spec 范围外(<150 / >3584 / 0 / 负数,均为 28 倍数)→ 软断言 200/400/413/422。"""
+        """Outside the [150, 3584] spec range (<150 / >3584 / 0 / negative, all multiples of 28) -> soft assert 200/400/413/422."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -857,14 +858,14 @@ class TestMaxLongSidePixel:
 
 
 # ============================================================
-# 10 video_size_limit — 视频大小限(≤50MB)
+# 10 video_size_limit — video size limit (<=50MB)
 # ============================================================
 
 class TestVideoSizeLimit:
-    """视频 ≤ 50 MB,URL/Base64 两种方式各自覆盖通过/拒绝两侧,以及 padded 等价物。"""
+    """Video <= 50 MB; URL/Base64 each cover both pass/reject sides, plus a padded equivalent."""
 
     def test_10_01_url_under_50mb(self):
-        """URL 方式: ~47.4 MB MP4 在 50 MB 上限内,应被接受。"""
+        """URL form: ~47.4 MB MP4 within the 50 MB cap should be accepted."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": size_fixture_url("video_49mb.mp4")}},
@@ -874,7 +875,7 @@ class TestVideoSizeLimit:
         assert_oai_success(r)
 
     def test_10_02_url_over_50mb(self):
-        """URL 方式: ~52 MB MP4 超过 50 MB 上限,服务端下载后应拒绝(4xx)。"""
+        """URL form: ~52 MB MP4 over the 50 MB cap; server should reject after download (4xx)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": size_fixture_url("video_51mb.mp4")}},
@@ -887,7 +888,7 @@ class TestVideoSizeLimit:
 
     @pytest.mark.timeout(600)
     def test_10_03_base64_under_50mb(self):
-        """Base64 方式: ~47.4 MB MP4 在 50 MB 上限内,应被接受。"""
+        """Base64 form: ~47.4 MB MP4 within the 50 MB cap should be accepted."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": size_fixture_data_url("video_49mb.mp4")}},
@@ -898,7 +899,7 @@ class TestVideoSizeLimit:
 
     @pytest.mark.timeout(600)
     def test_10_04_base64_over_50mb(self):
-        """Base64 方式: ~52 MB MP4 超过 50 MB 上限,应被拒绝(4xx)。"""
+        """Base64 form: ~52 MB MP4 over the 50 MB cap should be rejected (4xx)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": size_fixture_data_url("video_51mb.mp4")}},
@@ -912,9 +913,9 @@ class TestVideoSizeLimit:
     @pytest.mark.slow
     @pytest.mark.timeout(600)
     def test_10_05_padded_over_50mb_rejected(self):
-        """real_2s.mp4 + null padding 到 51MB(真实开头 + null 填充)→ 应被拒绝(4xx 或 500)。
+        """real_2s.mp4 + null padding to 51MB (real header + null padding) -> should be rejected (4xx or 500).
 
-        与 10_04 干净 52MB fixture 互补,覆盖不同形态的"超大视频"输入。
+        Complements 10_04 (clean 52MB fixture), covering different forms of "oversize video" input.
         """
         raw = (Path(__file__).parent / "fixtures" / "m3_test_videos" / "real_2s.mp4").read_bytes()
         target_size = 51 * 1024 * 1024
@@ -935,18 +936,18 @@ class TestVideoSizeLimit:
 
 
 # ============================================================
-# 11 long_video — 长视频(5/10/20/30 min)
+# 11 long_video — long video (5/10/20/30 min)
 # ============================================================
-# fixtures 不入 git(单个文件 > 30MB),通过环境变量
-# `M3_LONG_VIDEO_DIR` 指定目录(默认参考实现位于
-# /Users/minimax/Downloads/M3/assets/videos/duration/)。
+# fixtures are not committed to git (each file > 30MB); specify the directory via the
+# `M3_LONG_VIDEO_DIR` environment variable (default reference implementation lives at
+# /Users/minimax/Downloads/M3/assets/videos/duration/).
 
 def _long_video_present(name: str) -> bool:
     return long_video_path(name).exists()
 
 
 class TestLongVideo:
-    """5/10/20/30 分钟视频耗时与上限测试 (skipif env)。"""
+    """5/10/20/30 minute video latency and upper-bound tests (skipif env)."""
 
     @pytest.mark.slow
     @pytest.mark.skipif(
@@ -955,7 +956,7 @@ class TestLongVideo:
                "set M3_LONG_VIDEO_DIR=<dir-with-D_300s.mp4>",
     )
     def test_11_01_long_video_5min(self):
-        """5 分钟视频 (~5MB,默认 fps=1)。"""
+        """5-minute video (~5MB, default fps=1)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": long_video_b64("D_300s.mp4")}},
@@ -975,7 +976,7 @@ class TestLongVideo:
                "set M3_LONG_VIDEO_DIR=<dir-with-D_600s.mp4>",
     )
     def test_11_02_long_video_10min(self):
-        """10 分钟视频 (默认 fps=1)。"""
+        """10-minute video (default fps=1)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": long_video_b64("D_600s.mp4")}},
@@ -995,7 +996,7 @@ class TestLongVideo:
                "set M3_LONG_VIDEO_DIR=<dir-with-D_1200s.mp4>",
     )
     def test_11_03_long_video_20min(self):
-        """20 分钟视频 (fps=0.5 控总像素)。"""
+        """20-minute video (fps=0.5 to control total pixels)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -1018,7 +1019,7 @@ class TestLongVideo:
                "set M3_LONG_VIDEO_DIR=<dir-with-D_1800s.mp4>",
     )
     def test_11_04_long_video_30min(self):
-        """30 分钟视频 (fps=0.5 控总像素)。"""
+        """30-minute video (fps=0.5 to control total pixels)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -1036,18 +1037,18 @@ class TestLongVideo:
 
 
 # ============================================================
-# 12 media_gradient — 分辨率梯度 / 多视频梯度
+# 12 media_gradient — resolution gradient / multi-video gradient
 # ============================================================
 
 class TestMediaGradient:
-    """媒体梯度:视频分辨率梯度(1080P/2K)与多视频数量梯度(3/5 段)。"""
+    """Media gradient: video resolution gradient (1080P/2K) and multi-video count gradient (3/5 clips)."""
 
     @pytest.mark.parametrize("filename,label", [
         ("video_1920x1080.mp4", "1080P"),
         ("video_3840x2160.mp4", "2K"),
     ], ids=["1080P", "2K"])
     def test_12_01_resolution_gradient(self, filename, label):
-        """视频分辨率梯度(1080P / 2K),用现有 fixtures → HTTP 200。"""
+        """Video resolution gradient (1080P / 2K) using existing fixtures -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": fixture_video_base64(filename)}},
@@ -1063,7 +1064,7 @@ class TestMediaGradient:
     @pytest.mark.slow
     @pytest.mark.parametrize("count", [3, 5], ids=["count=3", "count=5"])
     def test_12_02_multi_video_gradient(self, count):
-        """多视频梯度(3 / 5 段叠加),用 real_2s.mp4 → 允许 200/4xx。"""
+        """Multi-video gradient (3 / 5 stacked clips) using real_2s.mp4 -> allow 200/4xx."""
         vid = real_video_b64("real_2s.mp4")
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -1078,7 +1079,7 @@ class TestMediaGradient:
         )
 
     def test_12_03_video_temporal(self):
-        """real_2s.mp4 + What happens in this video → content > 10 字符。"""
+        """real_2s.mp4 + What happens in this video -> content > 10 characters."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": real_video_b64("real_2s.mp4")}},
@@ -1094,7 +1095,7 @@ class TestMediaGradient:
         )
 
     def test_12_04_image_video_combined(self):
-        """真实图 sx1.jpg + 真实视频 real_2s.mp4 同一 message → content > 20。"""
+        """Real image sx1.jpg + real video real_2s.mp4 in the same message -> content > 20."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": real_image_b64_for_video("sx1.jpg", "image/jpeg")}},
@@ -1112,15 +1113,15 @@ class TestMediaGradient:
 
 
 # ============================================================
-# 13 video_extension — reasoning_split 等扩展字段
+# 13 video_extension — reasoning_split and other extension fields
 # ============================================================
 
 class TestVideoExtension:
-    """扩展协议字段在视频场景的兼容性。"""
+    """Compatibility of extension protocol fields in video scenarios."""
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_13_01_reasoning_split(self, stream):
-        """视频 + reasoning_split + thinking adaptive,流式/非流式两路,允许 200/400(扩展字段可能不支持)。"""
+        """Video + reasoning_split + thinking adaptive, both stream and non-stream paths; allow 200/400 (extension fields may be unsupported)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": real_video_b64("real_2s.mp4")}},
@@ -1137,14 +1138,14 @@ class TestVideoExtension:
 
 
 # ============================================================
-# 14 error_codes — 视频相关错误码
+# 14 error_codes — video-related error codes
 # ============================================================
 
 class TestVideoErrorCodes:
-    """视频相关错误码(从 TestOAIErrors 拆出)。"""
+    """Video-related error codes (split out from TestOAIErrors)."""
 
     def test_14_01_fps_out_of_range(self):
-        """fps=100 显著越界 → HTTP 400(硬断言)。"""
+        """fps=100 is significantly out of range -> HTTP 400 (hard assert)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": mp4_base64(), "fps": 100}},
