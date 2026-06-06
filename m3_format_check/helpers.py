@@ -38,7 +38,8 @@ OAI_HEADERS = {
     "Content-Type": "application/json",
 }
 
-# M3_EXTRA_HEADERS: JSON string, extra request headers injected across links. Parse failures are ignored.
+# M3_EXTRA_HEADERS: JSON string, extra request headers injected across links (e.g. X-MM-Text-Provider-Model)
+# Looks like '{"X-MM-Text-Provider-Model": "togetherai-m3:shadow/xxx"}'; ignored on parse failure
 _raw_extra_headers = os.environ.get("M3_EXTRA_HEADERS", "").strip()
 if _raw_extra_headers:
     try:
@@ -90,16 +91,16 @@ def _write_log_line(record: dict) -> None:
         f.flush()
 
 
-# --------------- Test images (≥672 px, low tier minimum size) ---------------
+# --------------- Test images (≥672 px, low-tier minimum size) ---------------
 #
 # Image format notes:
-# - PNG is generated at runtime per RGB args as a 672×672 solid color, because v05/t10 etc. cases need different colors;
-# - JPEG / GIF / WEBP are 672×672 red solid-color single frames generated offline by ffmpeg, base64 hardcoded to avoid runtime dependencies;
-# - The video MP4 is a 504×504 / 1-second / H.264 black frame generated offline by ffmpeg, base64 hardcoded.
-# Any downstream server-side rule that "must be >= low tier minimum size" (image >=672, video >=504) is satisfied by these fixtures.
+# - PNG is generated at runtime as a 672×672 solid color from RGB params, since v05/t10 etc. need different colors;
+# - JPEG / GIF / WEBP are ffmpeg-generated 672×672 solid-red single frames, base64-hardcoded to avoid runtime dependencies;
+# - Video MP4 is ffmpeg-generated 504×504 / 1s / H.264 black, base64-hardcoded.
+# Whenever the downstream has a "must be ≥ low-tier minimum size" server-side rule (images ≥672, videos ≥504), these fixtures satisfy it.
 
-_PNG_SIDE = 672  # image minimum side: satisfies low tier (>=672 px)
-_MP4_SIDE = 504  # video minimum side: satisfies low tier (>=504 px)
+_PNG_SIDE = 672  # Image shortest side: satisfies low tier (≥672 px)
+_MP4_SIDE = 504  # Video shortest side: satisfies low tier (≥504 px)
 
 
 def make_png_672(r=255, g=0, b=0, side=_PNG_SIDE):
@@ -275,7 +276,7 @@ _WEBP_672_RED_B64 = (
     "AA=="
 )
 
-# MP4 504×504 / 1s / H.264 black (raw 2456 B / b64 3276 B) — satisfies low tier >=504 px
+# MP4 504×504 / 1s / H.264 black (raw 2456 B / b64 3276 B) — satisfies low tier ≥504 px
 _MP4_504_BLACK_B64 = (
     "AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAANgbW9vdgAAAGxtdmhkAAAAAAAAAAAA"
     "AAAAAAAD6AAAA+gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAA"
@@ -325,22 +326,26 @@ _MP4_504_BLACK_B64 = (
 
 
 def make_jpeg_672():
-    """672×672 red JPEG, ffmpeg-generated, low tier compatible."""
+    """672×672 red JPEG, ffmpeg-generated, low-tier compatible."""
     return base64.b64decode(_JPEG_672_RED_B64)
 
 
 def make_gif_672():
-    """672×672 red GIF, ffmpeg-generated, low tier compatible."""
+    """672×672 red GIF, ffmpeg-generated, low-tier compatible."""
     return base64.b64decode(_GIF_672_RED_B64)
 
 
 def make_webp_672():
-    """672×672 red WEBP, ffmpeg-generated, low tier compatible."""
+    """672×672 red WEBP, ffmpeg-generated, low-tier compatible."""
     return base64.b64decode(_WEBP_672_RED_B64)
 
 
 def png_base64():
     return "data:image/png;base64," + base64.b64encode(make_png_672()).decode()
+
+
+def jpeg_base64():
+    return "data:image/jpeg;base64," + base64.b64encode(make_jpeg_672()).decode()
 
 
 def gif_base64():
@@ -358,10 +363,12 @@ def corrupted_base64():
 def large_image_base64(size_mb=12):
     """Generate oversized base64 image: a 672×672 PNG header + zero-pad to size_mb.
 
-    ⚠️ Known issue: this helper uses a minimal solid-color PNG handcrafted via stdlib as the base; some implementations have
-    silent drop behavior in the vision preprocess stage for "solid color / extremely low entropy" images, causing the size
-    validation gate to be bypassed — the server drops the image before the size check, uniformly returning 200 + fallback text.
-    For cases that need to strictly assert size > limit must be 4xx, please use oversized_real_image_data_url().
+    ⚠️ Known issue (2026-06-04): this helper uses a stdlib hand-crafted minimal solid-color PNG as the base,
+    and some providers (e.g. fireworks-m3) have a silent drop behavior in their vision preprocess for
+    "solid color / extremely low entropy" images (see badcase_scripts/fireworks_m3_11_02_root_cause_probe*),
+    causing the size check to be bypassed — the server drops the image before the size check and uniformly
+    returns 200 + fallback text. For cases that strictly require asserting "size > cap must be 4xx",
+    use oversized_real_image_data_url() instead.
     """
     data = make_png_672() + b"\x00" * (size_mb * 1024 * 1024)
     return "data:image/png;base64," + base64.b64encode(data).decode()
@@ -370,9 +377,9 @@ def large_image_base64(size_mb=12):
 def oversized_real_image_data_url(size_mb=12, fixture="sx1.jpg", media_type="image/jpeg"):
     """Generate oversized base64 by padding a REAL image with zero bytes to size_mb.
 
-    Uses a real natural image (default sx1.jpg, a woman by the sea, 239 KB JPEG) as the base + zero padding, to bypass the
-    silent drop bug against "minimal solid-color PNG" (see [[large_image_base64]] comment). The padding does
-    not affect the JPEG/PNG header, so frontend validation recognizes it as a complete image data url.
+    Uses a real natural image (default sx1.jpg, woman at the seaside, 239 KB JPEG) as base + zero padding,
+    to bypass providers' silent drop bug for "minimal solid-color PNG" (see [[large_image_base64]] notes).
+    Padding does not affect the JPEG/PNG header and can be recognized by frontend validation as a complete image data url.
     """
     fixture_path = Path(__file__).parent / "fixtures" / "m3_test_images" / "real" / fixture
     if not fixture_path.exists():
@@ -387,7 +394,7 @@ def mime_mismatch_base64():
     return "data:image/jpeg;base64," + base64.b64encode(make_png_672()).decode()
 
 
-# --------------- Test video (504×504, 1s, H.264; low tier compatible) ---------------
+# --------------- Test video (504×504, 1s, H.264; low-tier compatible) ---------------
 
 SAMPLE_VIDEO_URL = "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
 
@@ -404,31 +411,31 @@ def mp4_base64():
 # --------------- Oversize fixtures (size-limit boundary tests) ---------------
 #
 # Server-side file size constraints (size-limit boundary tests):
-#   - image <= 10 MB (applies to both URL/Base64)
-#   - video <= 50 MB (applies to both URL/Base64)
-#   - request body <= 64 MB (easier to trigger via Base64 path)
-# 5 fixtures are committed to git (total ~150MB) and COS at the same time. Loading logic: read locally if present, otherwise download from COS URL and cache.
+#   - Images ≤ 10 MB (applies to both URL and Base64)
+#   - Videos ≤ 50 MB (applies to both URL and Base64)
+#   - Request body ≤ 64 MB (easy to trigger via Base64 path)
+# 5 fixtures are committed to git (~150MB total) and to COS; loading logic: read local if present, otherwise download from COS URL and cache.
 _FIXTURES_DIR = Path(__file__).parent / "fixtures"
 _COS_BASE = "https://qa-tool-1315599187.cos.ap-shanghai.myqcloud.com/m3-test"
 
-# filename -> COS URL (used as the URL path by size_limit tests)
+# Filename → COS URL (used as URL path by size_limit tests)
 SIZE_FIXTURE_URLS = {
-    "image_9mb.png":   f"{_COS_BASE}/image_9mb.png",   # ~9.2 MB, image <=10MB (should pass)
+    "image_9mb.png":   f"{_COS_BASE}/image_9mb.png",   # ~9.2 MB, image ≤10MB (should pass)
     "image_11mb.png":  f"{_COS_BASE}/image_11mb.png",  # ~11.1 MB, image >10MB (should reject)
-    "image_65mb.png":  f"{_COS_BASE}/image_65mb.png",  # ~67 MB, base64 hits 64MB request body limit (should reject)
-    "video_49mb.mp4":  f"{_COS_BASE}/video_49mb.mp4",  # ~47.4 MB, video <=50MB (should pass)
+    "image_65mb.png":  f"{_COS_BASE}/image_65mb.png",  # ~67 MB, base64 hits the 64MB request body cap (should reject)
+    "video_49mb.mp4":  f"{_COS_BASE}/video_49mb.mp4",  # ~47.4 MB, video ≤50MB (should pass)
     "video_51mb.mp4":  f"{_COS_BASE}/video_51mb.mp4",  # ~52 MB, video >50MB (should reject)
 }
 
 
 def load_size_fixture(name: str) -> bytes:
-    """Load from local fixtures; if absent, download from COS and cache locally."""
+    """Load from local fixtures; if missing, download from COS and cache locally."""
     if name not in SIZE_FIXTURE_URLS:
         raise ValueError(f"unknown size fixture: {name}")
     fp = _FIXTURES_DIR / name
     if fp.exists():
         return fp.read_bytes()
-    # fallback: fetch from COS
+    # fallback: pull from COS
     _FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
     url = SIZE_FIXTURE_URLS[name]
     with httpx.stream("GET", url, timeout=300.0) as resp:
@@ -440,14 +447,14 @@ def load_size_fixture(name: str) -> bytes:
 
 
 def size_fixture_url(name: str) -> str:
-    """Return the fixture's COS URL (for use by image_url/video_url URL paths)."""
+    """Return the fixture's COS URL (for image_url/video_url URL path)."""
     if name not in SIZE_FIXTURE_URLS:
         raise ValueError(f"unknown size fixture: {name}")
     return SIZE_FIXTURE_URLS[name]
 
 
 def size_fixture_data_url(name: str) -> str:
-    """Return the fixture's base64 data URL (for use by image_url/video_url base64 paths)."""
+    """Return the fixture's base64 data URL (for image_url/video_url base64 path)."""
     raw = load_size_fixture(name)
     if name.endswith(".png"):
         return "data:image/png;base64," + base64.b64encode(raw).decode()
@@ -546,11 +553,11 @@ NESTED_SCHEMA_TOOL_OAI = {
 }
 
 
-# --------------- Advanced schema tools (used by G2~G7) ---------------
+# --------------- Advanced schema tools (for G2~G7) ---------------
 
-# Parameter-less tool, used by G2 multi-tool parallel (get_current_time needs no business params)
-# Note: M3 official gateway strictly validates function.parameters as non-empty (spec 1.8.1 marks optional, actually not allowed)
-# -> use {"type":"object","properties":{}} to express "accepts empty parameter object"
+# Zero-arg tool, used by G2 multi-tool parallel (get_current_time takes no business params)
+# Note: M3 official gateway strictly validates that function.parameters is non-empty (spec 1.8.1 marks it optional, but actually not allowed)
+# → use {"type":"object","properties":{}} to express "accepts an empty parameters object"
 TIME_TOOL_OAI = {
     "type": "function",
     "function": {
@@ -560,7 +567,7 @@ TIME_TOOL_OAI = {
     },
 }
 
-# Weather tool with enum, used by G3 enum validation
+# Weather tool with enum, used for G3 enum validation
 WEATHER_WITH_UNIT_TOOL_OAI = {
     "type": "function",
     "function": {
@@ -581,7 +588,7 @@ WEATHER_WITH_UNIT_TOOL_OAI = {
     },
 }
 
-# Forecast tool with numeric range, used by G4 min/max validation
+# Forecast tool with numeric range, used for G4 min/max validation
 FORECAST_TOOL_OAI = {
     "type": "function",
     "function": {
@@ -603,7 +610,7 @@ FORECAST_TOOL_OAI = {
     },
 }
 
-# Flight search tool with multiple required fields, used by G5 multi-required validation
+# Flight search tool with multiple required fields, used for G5 multi-required validation
 FLIGHT_SEARCH_TOOL_OAI = {
     "type": "function",
     "function": {
@@ -627,7 +634,7 @@ FLIGHT_SEARCH_TOOL_OAI = {
     },
 }
 
-# Nested array-of-objects booking tool, used by G6 nested validation
+# Booking tool with nested array-of-objects, used for G6 nested validation
 BOOKING_TOOL_OAI = {
     "type": "function",
     "function": {
@@ -662,10 +669,10 @@ BOOKING_TOOL_OAI = {
 def _extract_trace_id(response_headers: Optional[dict],
                       body: Optional[dict],
                       chunks: Optional[list]) -> Optional[str]:
-    """Best-effort extract trace_id: header first -> body.id (non_stream) -> chunks[0].id (stream).
+    """Best-effort trace_id extraction: header first → body.id (non_stream) → chunks[0].id (stream).
 
-    Ordering rationale:
-      1. Gateway-level x-request-id / x-trace-id / trace-id (case-insensitive), closest to "request-level unique identifier"
+    Order considerations:
+      1. Gateway-layer x-request-id / x-trace-id / trace-id (case-insensitive), closest to a "per-request unique identifier"
       2. body["id"] — OAI chat.completion spec field chatcmpl-xxx, always returned
       3. In stream mode, take id from the first data chunk (same source as body.id)
     """
@@ -715,8 +722,8 @@ def oai_chat(payload, stream=False, headers=None, timeout=TIMEOUT):
                 with c.stream("POST", OAI_URL, json=payload, headers=hdrs) as resp:
                     status = resp.status_code
                     response_headers = dict(resp.headers)
-                    # Error responses are usually JSON rather than SSE; read directly and stuff into body, skip iter_lines
-                    # (iter_lines only captures "data: " / "event: " prefixes; JSON error bodies would be silently swallowed)
+                    # Error responses are usually not SSE but plain JSON; read the body directly and skip iter_lines
+                    # (iter_lines only captures "data: " / "event: " prefixes, so a JSON error body would be silently swallowed)
                     if status >= 400:
                         resp.read()
                         try:
@@ -799,11 +806,11 @@ def assert_oai_success(result):
 
 
 def assert_oai_stream_success(result):
-    """OAI stream success assertion: HTTP 200 + non-empty chunks + tail contains valid finish_reason.
+    """OAI streaming success assertion: HTTP 200 + non-empty chunks + tail contains a valid finish_reason.
 
-    The tail finish_reason check is folded into assert_stream_complete logic,
-    so all stream cases benefit automatically (no need to add it manually one by one).
-    If a case intentionally needs "no finish_reason" (extremely rare extreme tests), use a bare status==200 check.
+    The tail finish_reason check is folded into the assert_stream_complete logic
+    so all stream cases benefit automatically (no need to add it case by case).
+    If a case intentionally needs "no finish_reason" (very rare extreme tests), use the bare status==200 check instead.
     """
     assert result["status"] == 200, f"Expected 200, got {result['status']}"
     assert result.get("stream")
@@ -812,14 +819,14 @@ def assert_oai_stream_success(result):
 
 
 def assert_stream_complete(result, msg: str = ""):
-    """Assert that the stream response ended normally: the last non-empty chunk contains a valid finish_reason.
+    """Assert a streaming response finishes cleanly: the last non-empty chunk carries a valid finish_reason.
 
-    Background: the OAI stream protocol requires an end frame (or with [DONE] marker). In M3 the last chunk in practice contains
-    `choices[0].finish_reason ∈ {stop, length, tool_calls, content_filter}`.
+    Background: the OAI streaming protocol requires a terminating frame (or a [DONE] marker). Empirically, M3's last chunk
+    carries `choices[0].finish_reason ∈ {stop, length, tool_calls, content_filter}`.
     """
     chunks = result.get("chunks") or []
     assert chunks, f"{msg}: stream has no chunks"
-    # Skip the tail pure-usage chunk (choices may be empty) and the [DONE] marker
+    # Skip the trailing pure-usage chunk (choices may be empty) and the [DONE] marker
     finish_reason = None
     for c in reversed(chunks):
         choices = c.get("choices") or []
@@ -845,19 +852,19 @@ def assert_error(result, expected_status):
 
 # --------------- Thinking detection ---------------
 # spec 1.4: thinking.type ∈ disabled / adaptive
-# Different OAI-compat implementations may place thinking in different locations; do robust detection here:
-#   1) <think>...</think> tag wrapped inside content (BUG-X form noted in V04/V09)
+# Different OAI-compatible implementations may place thinking in different locations; do a robust detection here:
+#   1) <think>...</think> tag wrapped inside content (BUG-X form annotated in V04/V09)
 #   2) message.reasoning_content as a separate field (common when reasoning_split=true)
 #   3) usage.completion_tokens_details.reasoning_tokens > 0
-# Any hit counts as "thought".
+# Any hit counts as "did think".
 
 def _stream_choice_message(result: dict) -> dict:
-    """Aggregate deltas from the stream result to reconstruct a message-like dict (taking the first choice).
+    """Aggregate deltas from a streaming result back into a message-like dict (takes the first choice).
 
     Compatible with two thinking field namings:
-      - delta.reasoning_content (M3 spec)
-      - delta.reasoning         (some OAI-compat implementations)
-    Either appearance is accumulated into reasoning_content.
+      - M3 spec: delta.reasoning_content
+      - Together / some OAI-compatible implementations: delta.reasoning
+    Either occurrence is accumulated into reasoning_content.
     """
     msg = {"content": "", "reasoning_content": ""}
     for chunk in result.get("chunks") or []:
@@ -869,24 +876,32 @@ def _stream_choice_message(result: dict) -> dict:
             msg["content"] += delta["content"]
         if delta.get("reasoning_content"):
             msg["reasoning_content"] += delta["reasoning_content"]
-        # compatible with delta.reasoning from some implementations
+        # Compat for together-m3 etc. that emit delta.reasoning
         if delta.get("reasoning"):
             msg["reasoning_content"] += delta["reasoning"]
     return msg
 
 
+def _stream_usage(result: dict) -> dict:
+    """From a streaming result, take the usage field of the last chunk that contains usage."""
+    for chunk in reversed(result.get("chunks") or []):
+        if isinstance(chunk, dict) and chunk.get("usage"):
+            return chunk["usage"]
+    return {}
+
+
 def get_thinking_signals(result: dict) -> dict:
-    """Extract all possible thinking signals, for assertion/debug use.
+    """Extract all possible thinking signals, for use in assertions/debugging.
 
-    Compatible with two field namings:
-      - message.reasoning_content (M3 spec)
-      - message.reasoning         (some OAI-compat implementations)
-    Either non-empty counts as having thinking. usage.*_tokens is no longer used as a determination basis (implementations vary too much).
+    Compatible with two field namings (M3 spec / together etc. OAI-compatible):
+      - message.reasoning_content (spec)
+      - message.reasoning         (together)
+    Either non-empty counts as having thinking. usage.*_tokens is no longer used as a decision basis (vendor implementations vary too much).
 
-    Returns a dict containing:
+    Returns a dict with:
       - has_think_tag (bool): whether content contains a <think> tag
       - reasoning_content (str): the thinking body (already merged from both fields)
-      - any (bool): whether any signal hits
+      - any (bool): whether any signal hit
     """
     if result.get("stream"):
         msg = _stream_choice_message(result)
@@ -906,8 +921,18 @@ def get_thinking_signals(result: dict) -> dict:
     }
 
 
+def assert_thinking_present(result: dict, msg: str = ""):
+    """Assert that the response contains a thinking signal (a <think> tag or non-empty reasoning_content/reasoning)."""
+    sig = get_thinking_signals(result)
+    assert sig["any"], (
+        f"{msg}: expected thinking present, but no signal found.\n"
+        f"  has_think_tag={sig['has_think_tag']}\n"
+        f"  reasoning_content_len={len(sig['reasoning_content'])}"
+    )
+
+
 def assert_thinking_absent(result: dict, msg: str = ""):
-    """Assert that the response contains no thinking signal (disabled mode should satisfy this)"""
+    """Assert that the response contains no thinking signal (should hold in disabled mode)."""
     sig = get_thinking_signals(result)
     assert not sig["any"], (
         f"{msg}: expected no thinking, but found signal.\n"
@@ -917,9 +942,9 @@ def assert_thinking_absent(result: dict, msg: str = ""):
 
 
 def get_oai_content(result):
-    """Aggregate message.content from an OAI response (stream = accumulate delta.content).
+    """Aggregate message.content from an OAI response (stream = sum of delta.content).
 
-    Defensive handling: the tail of a stream often contains a pure-usage chunk (choices=[]); don't take [0] or you'll get IndexError.
+    Defensive handling: streams commonly end with a pure-usage chunk (choices=[]); do not index [0] or it raises IndexError.
     """
     if result.get("stream"):
         parts = []
@@ -940,24 +965,24 @@ def get_oai_content(result):
 
 # --------------- Tool call extraction & assertions ---------------
 # spec 1.8.1 tools list structure + function.parameters recommended format
-# All "trigger-type" toolcall cases assert via this set of helpers:
-#   - the model actually called the expected tool (name matches)
+# All "trigger-type" toolcall cases use this toolkit for assertions:
+#   - The model actually called the expected tool (name matches)
 #   - arguments is valid JSON
-#   - arguments field values are consistent with prompt/definition expectations (optional subset match)
-# Stream responses need to be rebuilt per OAI delta.tool_calls protocol
+#   - arguments field values match prompt/definition expectations (optional subset match)
+# Streaming responses need to be rebuilt according to the OAI delta.tool_calls protocol
 
 def get_tool_calls(result: dict) -> list:
-    """Extract the tool_calls list from oai_chat return (compatible with both stream/non-stream).
+    """Extract the tool_calls list from an oai_chat return (both streaming and non-streaming compatible).
 
     Returns [{"id": str, "name": str, "arguments_raw": str, "arguments_obj": dict|None}, ...]
-    arguments_obj being None indicates it can't be parsed as JSON (also an assertion failure signal)
+    arguments_obj being None means it could not be parsed as JSON (also a signal of assertion failure).
     """
     raw_calls = []  # [{"id", "name", "arguments"}] intermediate form
 
     if result.get("stream"):
-        # Stream: rebuild per OAI delta.tool_calls protocol
+        # Streaming: rebuild per OAI delta.tool_calls protocol
         # In delta, tool_calls is [{"index": i, "id": ..., "function": {"name": ..., "arguments": "fragment"}}]
-        # The arguments strings for the same index need to be concatenated; id generally appears the first time
+        # arguments strings at the same index need to be concatenated; id usually appears the first time
         partials = {}  # index -> {"id": str, "name": str, "arguments": str}
         for chunk in result.get("chunks") or []:
             choices = chunk.get("choices") or []
@@ -968,10 +993,10 @@ def get_tool_calls(result: dict) -> list:
                 idx = tc.get("index", 0)
                 slot = partials.setdefault(idx, {"id": "", "name": "", "arguments": ""})
                 if tc.get("id"):
-                    slot["id"] = tc["id"]  # id only needs to appear once, later occurrences overwrite
+                    slot["id"] = tc["id"]  # id appears once; later occurrences overwrite
                 fn = tc.get("function") or {}
                 if fn.get("name"):
-                    slot["name"] += fn["name"]  # some implementations fragment name too
+                    slot["name"] += fn["name"]  # some implementations also fragment the name
                 if fn.get("arguments") is not None:
                     slot["arguments"] += fn["arguments"]
         for idx in sorted(partials):
@@ -990,7 +1015,7 @@ def get_tool_calls(result: dict) -> list:
                 "arguments": fn.get("arguments") or "",
             })
 
-    # parse arguments JSON
+    # Parse arguments JSON
     parsed = []
     for c in raw_calls:
         args_raw = c.get("arguments") or ""
@@ -1010,15 +1035,15 @@ def get_tool_calls(result: dict) -> list:
 
 
 def _value_loosely_equal(actual, expected) -> bool:
-    """Loose matching of field values:
-    - strings: case-insensitive + strip + tolerate containment (actual contains expected or vice versa)
-    - numeric types interoperate (int/float)
-    - bool/list/dict: strict equality
-    Used for asserting scenarios where prompt says 'Beijing' but model may give 'Beijing'/'beijing'/'Beijing, China'.
+    """Loose match for field values:
+    - Strings: case-insensitive + strip leading/trailing spaces + tolerate containment (actual contains expected or vice versa)
+    - Numeric types are interchangeable (int/float)
+    - bool/list/dict require strict equality
+    Used for scenarios where the prompt says 'Beijing' but the model may return '北京'/'beijing'/'Beijing, China'.
     """
     if expected is None:
         return actual is None
-    if isinstance(expected, bool):  # bool must be checked before int (True is int)
+    if isinstance(expected, bool):  # bool must be checked before int (True is an int)
         return actual == expected
     if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
         return abs(actual - expected) < 1e-9
@@ -1034,12 +1059,12 @@ def _value_loosely_equal(actual, expected) -> bool:
 
 
 def _expected_types_for(param_schema: dict) -> tuple:
-    """Map JSON Schema's type to a Python type tuple for use with isinstance.
-    Supports a single type string or a type array (spec 1.8.1 recommends type:["string","number",...]).
+    """Map JSON Schema type into a tuple of Python types, for use with isinstance.
+    Supports a single type string or an array of types (spec 1.8.1 recommends type:["string","number",...])
     """
     type_field = param_schema.get("type")
     if not type_field:
-        return (object,)  # no type constraint, allow any type
+        return (object,)  # No type constraint, allow any type
     if isinstance(type_field, str):
         types = [type_field]
     else:
@@ -1073,16 +1098,16 @@ def _validate_schema(args, schema: dict, path: str, msg: str):
     """Recursively validate args against a JSON Schema subset (type/required/properties/items/enum/min/max).
 
     Supported keywords:
-      - type (single value or array, see _expected_types_for)
-      - required (object mandatory fields)
-      - properties (object field recursion)
-      - items (array element recursion)
-      - enum (enum validation of any value)
+      - type (single value or array; see _expected_types_for)
+      - required (mandatory fields on objects)
+      - properties (recurse into object fields)
+      - items (recurse into array elements)
+      - enum (enum check for any value)
       - minimum / maximum (number/integer range)
       - minLength / maxLength (string length)
       - minItems / maxItems (array length)
 
-    On assertion failure, the path locates the specific field (e.g. "passengers[0].name").
+    On assertion failure, `path` pinpoints the specific field (e.g. "passengers[0].name").
     """
     # 1. type
     expected_types = _expected_types_for(schema)
@@ -1159,13 +1184,13 @@ def assert_tool_called(result: dict,
                        msg: str = ""):
     """Assert the model called at least one tool, with optional validations:
       - expected_name: str or list[str]. When str, the first tool_call.name must match;
-        when list, the first tool_call.name must be in list (for "model may pick one of them" scenarios)
-      - expected_args_subset: arguments_obj should contain these fields (values use _value_loosely_equal)
-      - schema: function.parameters JSON Schema, recursive validation:
+        when list, the first tool_call.name must be ∈ list (for "the model may pick one of them" scenarios)
+      - expected_args_subset: arguments_obj should contain these fields (values compared via _value_loosely_equal)
+      - schema: function.parameters JSON Schema, validated recursively:
           * required / properties / items / enum / minimum / maximum / minLength / maxLength
-          * nested object and array fields are recursed in depth
+          * Nested object and array fields are recursed deeply
 
-    On assertion failure, prints raw + parsed, convenient for locating "called but JSON broken / wrong field type / wrong tool".
+    On assertion failure, prints raw + parsed to help diagnose "called but JSON broken / wrong field types / wrong tool".
     """
     calls = get_tool_calls(result)
     assert calls, (
@@ -1209,11 +1234,11 @@ def assert_tool_called(result: dict,
 
 
 def assert_tools_called_set(result: dict, expected_names, schemas: dict = None, msg: str = ""):
-    """Assert the model called all names in the set (order-free, supersets allowed), for multi-tool parallel scenarios.
-      - expected_names: list/set[str] names expected to all appear
-      - schemas: dict[str -> schema] optional, validate corresponding args by name
+    """Assert the model called every name in the set (any order, extras allowed), for multi-tool parallel scenarios.
+      - expected_names: list/set[str] of names that must all appear
+      - schemas: optional dict[str -> schema] to validate the corresponding args by name
 
-    Stricter than assert_tool_called: expected_names must all appear; missing any fails.
+    Stricter than assert_tool_called: every expected_name must appear; missing any one fails.
     """
     calls = get_tool_calls(result)
     assert calls, (
@@ -1239,7 +1264,7 @@ def assert_tools_called_set(result: dict, expected_names, schemas: dict = None, 
 
 
 def assert_no_tool_called(result: dict, msg: str = ""):
-    """Assert the model did not call any tool (for tool_choice='none' / should-fallback-to-chat scenarios)"""
+    """Assert the model did not call any tool (for tool_choice='none' / should-fall-back-to-chat scenarios)."""
     calls = get_tool_calls(result)
     assert not calls, (
         f"{msg}: expected no tool_call, but got {len(calls)}: "

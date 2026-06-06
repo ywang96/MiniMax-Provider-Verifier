@@ -1,27 +1,26 @@
 """
-M3 API Test — video modality case collection
+M3 API Test — video modality case suite
 
-Organized by "validation content" into modules; case naming convention:
-    test_<module_id>_<case_index_within_module>_<scenario_description>
+Organized into modules by "what is being validated"; case naming convention:
+    test_<module_number>_<within_module_order>_<scenario_description>
 
-Module ID / topic:
+Module number / topic:
     01  base64_video          base64 video basic acceptance
     02  url_video             URL video acceptance
-    03  video_format          video container/MIME format (MOV/MKV/AVI etc.)
+    03  video_format          video container/MIME format (MOV/MKV/AVI, etc.)
     04  multi_video           multi-video stacking / count upper bound
     05  image_video_mixed     image + video mixed message
     06  fps_param             fps valid tiers and out-of-range
     07  detail_param          detail / fps field defaults and combinations
-    08  resolution_tier       resolution tier / boundary / pixel upper bound
+    08  resolution_tier       resolution tier / boundary / pixel cap
     09  max_long_side_pixel   max_long_side_pixel (multiple of 28) contract
     10  video_size_limit      video size limit (<=50MB)
-    11  long_video            long videos (5/10/20/30 min)
+    11  long_video            long video (5/10/20/30 min)
     12  media_gradient        resolution gradient / multi-video gradient
     13  video_extension       reasoning_split and other extension fields
     14  error_codes           video-related error codes
 
-Modality priority video > image > text; this file covers video (image+video
-mixed cases also belong here).
+Modality priority video > image > text; this file covers video (mixed image+video also lives here).
 
 All cases go through helpers.oai_chat() to /v1/chat/completions; jsonl is
 written to RUN_LOG_PATH (injected by conftest).
@@ -41,9 +40,8 @@ from image_tools import (
 
 
 # ============================================================
-# Local helpers for this file: real video fixture loaders
-# (avoids polluting helpers.py; the canonical `real_video_b64`
-# entrypoint mirrored here for symmetry with m3_image_tests.py)
+# File-local helpers: real video fixture loaders
+# (avoid polluting helpers.py / shares name+semantics with the M3 team reference implementation's real_video_b64)
 # ============================================================
 
 _REAL_VIDEO_DIR = Path(__file__).parent / "fixtures" / "m3_test_videos"
@@ -55,21 +53,21 @@ def real_video_b64(name: str = "real_2s.mp4", mime: str = "video/mp4") -> str:
 
     Same semantics as m3_image_tests.py:real_image_b64. Common fixtures:
       - real_2s.mp4     (~104KB, P09/P14 content understanding cases)
-      - 12s_real.mp4    (~628KB, 06 fps valid tier 12-second video)
-      - flower-video.mp4 (~1MB, second clip in image+video mixed cases)
-      - test_video.mov / .mkv / .avi (~160KB, real non-MP4 format smoke tests for module 03)
+      - 12s_real.mp4    (~628KB, 06 fps valid-tier 12-second video)
+      - flower-video.mp4 (~1MB, second clip for image+video mixed cases)
+      - test_video.mov / .mkv / .avi (~160KB, 03 module real non-MP4 format smoke)
     """
     path = _REAL_VIDEO_DIR / name
     if not path.exists():
         raise FileNotFoundError(
             f"real video fixture missing: {path}\n"
-            f"fixtures/m3_test_videos/ should contain real_2s.mp4 / 12s_real.mp4 etc."
+            f"参考实现期望 fixtures/m3_test_videos/ 下存在 real_2s.mp4 / 12s_real.mp4 等"
         )
     return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
 
 
 def real_image_b64_for_video(name: str = "sx1.jpg", mime: str = "image/jpeg") -> str:
-    """Read local copy from fixtures/m3_test_images/real/<name>, for image+video mixed cases in this video test file.
+    """Read a local copy of fixtures/m3_test_images/real/<name>, used by image+video mixed cases inside the video file.
 
     Kept isolated from m3_image_tests.py:real_image_b64 to avoid cross-file imports.
     """
@@ -77,14 +75,14 @@ def real_image_b64_for_video(name: str = "sx1.jpg", mime: str = "image/jpeg") ->
     if not path.exists():
         raise FileNotFoundError(
             f"real image fixture missing: {path}\n"
-            f"fixtures/m3_test_images/real/ should contain sx1.jpg"
+            f"参考实现期望 fixtures/m3_test_images/real/ 下存在 sx1.jpg"
         )
     return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
 
 
-# Long videos (>10MB) are read from the directory specified by the
-# M3_LONG_VIDEO_DIR env var by default; when unset, fall back to local
-# fixtures/m3_test_videos/ (D_300s/D_600s/D_1200s/D_1800s.mp4 already in repo).
+# Long videos (>10MB) are loaded preferentially from the directory specified by M3_LONG_VIDEO_DIR;
+# when unset, fall back to local fixtures/m3_test_videos/ (D_300s/D_600s/D_1200s/D_1800s.mp4 committed).
+# Example: export M3_LONG_VIDEO_DIR=/Users/minimax/Downloads/M3/assets/videos/duration
 _LONG_VIDEO_DIR_ENV = "M3_LONG_VIDEO_DIR"
 _LOCAL_LONG_DIR = Path(__file__).parent / "fixtures" / "m3_test_videos"
 
@@ -107,7 +105,7 @@ def long_video_b64(name: str, mime: str = "video/mp4") -> str:
 
 
 def _get_prompt_tokens(r: dict) -> int:
-    """Extract prompt_tokens from oai_chat return value (supports both stream / non_stream)."""
+    """Extract prompt_tokens from an oai_chat response (compatible with stream / non_stream)."""
     if not r.get("stream"):
         body = r.get("body") or {}
         return (body.get("usage") or {}).get("prompt_tokens", 0)
@@ -119,7 +117,7 @@ def _get_prompt_tokens(r: dict) -> int:
 
 
 def _assert_basic_ok(r: dict, msg: str = ""):
-    """Basic assertions for valid-tier happy path: HTTP 200 + positive prompt_tokens."""
+    """Basic assertion for the happy-path of a valid tier: HTTP 200 + positive prompt_tokens."""
     assert r["status"] == 200, (
         f"{msg}: expected 200, got {r['status']}: "
         f"{r.get('body', '')[:300] if isinstance(r.get('body'), str) else r.get('body')}"
@@ -144,7 +142,7 @@ def _video_payload(filename: str, detail: str = None, fps: float = None,
     }
 
 
-# Real asset marker shared across multiple modules (Spring Festival cartoon pony, 5MB)
+# Real-asset marker shared across multiple modules (Spring Festival cartoon pony, 5MB)
 PONY_VIDEO_FIXTURE = "476117246902419462.mp4"
 PONY_VIDEO_URL = (
     "https://qa-tool-1315599187.cos.ap-shanghai.myqcloud.com/m3-test/"
@@ -157,10 +155,10 @@ PONY_VIDEO_URL = (
 # ============================================================
 
 class TestBase64Video:
-    """Feed video via base64 dataURL: verify minimal usable path + real asset content understanding."""
+    """Feed video via base64 dataURL: verify minimum viable path + real-asset content understanding."""
 
     def test_01_01_base64_video(self):
-        """base64 minimal MP4 + What do you see -> HTTP 200 + non-empty answer."""
+        """Minimal base64 MP4 + What do you see -> HTTP 200 + non-empty answer."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": mp4_base64()}},
@@ -175,7 +173,7 @@ class TestBase64Video:
         )
 
     def test_01_02_base64_real_pony_cartoon(self):
-        """Real asset (Spring Festival cartoon pony, 5MB) via base64 input, verify content understanding + content > 50."""
+        """Real asset (Spring Festival cartoon pony, 5MB) base64 input: verify content understanding + content > 50."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -200,7 +198,7 @@ class TestBase64Video:
 # ============================================================
 
 class TestURLVideo:
-    """video_url.url via public network / COS URL form."""
+    """video_url.url uses public network / COS URL form."""
 
     def test_02_01_url_video(self):
         """Public sample mp4 URL -> HTTP 200 + non-empty answer (basic URL acceptance)."""
@@ -218,7 +216,7 @@ class TestURLVideo:
         )
 
     def test_02_02_url_real_pony_cartoon(self):
-        """Real asset (Spring Festival cartoon pony) via OSS URL input, verify content understanding + content > 50."""
+        """Real asset (Spring Festival cartoon pony) via OSS URL input: verify content understanding + content > 50."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": PONY_VIDEO_URL}},
@@ -237,14 +235,14 @@ class TestURLVideo:
 
 
 # ============================================================
-# 03 video_format — video container/MIME format (MOV/MKV/AVI etc.)
+# 03 video_format — video container/MIME format (MOV/MKV/AVI, etc.)
 # ============================================================
 
 class TestVideoFormat:
-    """Video format compatibility — including spoofed MIME (MOV/MKV/AVI etc.) and real non-MP4 file smoke tests."""
+    """Video format compatibility — includes disguised MIME (MOV/MKV/AVI, etc.) and real non-MP4 file smoke."""
 
     def test_03_01_mkv_format_legacy(self):
-        """MKV (video/x-matroska) disguised with minimal mp4 -> xfail if known unsupported."""
+        """MKV (video/x-matroska) disguised with minimal mp4 -> xfail when known unsupported."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -258,7 +256,7 @@ class TestVideoFormat:
             pytest.xfail("Known BUG: MKV format not supported")
 
     def test_03_02_mov_format_video_quicktime(self):
-        """MOV (video/quicktime base64) -> xfail on known BUG-7."""
+        """MOV (video/quicktime base64) -> xfail when known BUG-7."""
         mov_b64 = ("data:video/quicktime;base64,"
                    + base64.b64encode(make_minimal_mp4_504()).decode())
         r = oai_chat({
@@ -271,7 +269,7 @@ class TestVideoFormat:
             pytest.xfail("Known BUG-7: MOV format not supported")
 
     def test_03_03_mov_format_video_mov(self):
-        """MOV (spec 1.3.5 requires data:video/mov;base64,...) -> xfail on known BUG-7."""
+        """MOV (spec 1.3.5 requires data:video/mov;base64,...) -> xfail when known BUG-7."""
         mov_b64 = ("data:video/mov;base64,"
                    + base64.b64encode(make_minimal_mp4_504()).decode())
         r = oai_chat({
@@ -284,7 +282,7 @@ class TestVideoFormat:
             pytest.xfail("Known BUG-7: MOV format not supported")
 
     def test_03_04_mkv_format_video_matroska(self):
-        """MKV (video/x-matroska) disguised with minimal mp4 -> xfail on known BUG-7."""
+        """MKV (video/x-matroska) disguised with minimal mp4 -> xfail when known BUG-7."""
         mkv_b64 = ("data:video/x-matroska;base64,"
                    + base64.b64encode(make_minimal_mp4_504()).decode())
         r = oai_chat({
@@ -299,7 +297,7 @@ class TestVideoFormat:
     @pytest.mark.parametrize("mime", ["video/avi", "video/x-msvideo"],
                              ids=["video_avi", "video_x_msvideo"])
     def test_03_05_avi_format(self, mime):
-        """Both valid AVI MIMEs (video/avi / video/x-msvideo) disguised with minimal mp4 -> xfail if unsupported."""
+        """Both valid MIME variants of AVI (video/avi / video/x-msvideo) disguised with minimal mp4 -> xfail when unsupported."""
         avi_b64 = f"data:{mime};base64," + base64.b64encode(make_minimal_mp4_504()).decode()
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -311,7 +309,7 @@ class TestVideoFormat:
             pytest.xfail(f"AVI format with MIME={mime} not supported / fixture is mp4 data")
 
     def test_03_06_real_mov_smoke(self):
-        """Real MOV file (fixtures/test_video.mov) default detail/fps -> accept or legitimate reject."""
+        """Real MOV file (fixtures/test_video.mov) with default detail/fps -> accept or valid reject."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -326,7 +324,7 @@ class TestVideoFormat:
         )
 
     def test_03_07_real_avi_smoke(self):
-        """Real AVI file (fixtures/test_video.avi) default detail/fps -> accept or legitimate reject."""
+        """Real AVI file (fixtures/test_video.avi) with default detail/fps -> accept or valid reject."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -341,7 +339,7 @@ class TestVideoFormat:
         )
 
     def test_03_08_real_mkv_smoke(self):
-        """Real MKV file (fixtures/test_video.mkv) default detail/fps -> accept or legitimate reject."""
+        """Real MKV file (fixtures/test_video.mkv) with default detail/fps -> accept or valid reject."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -361,7 +359,8 @@ class TestVideoFormat:
 # ============================================================
 
 class TestMultiVideo:
-    """spec 1.3.6 video count upper bound 5 segments + multi-segment stacking boundary coverage."""
+    """spec 1.3.6 (updated) video count upper bound 20 + multi-clip stacking boundary coverage.
+    20 base64 clips would blow up the request body; boundary cases switch to URL form (fixture_video_url)."""
 
     def _mp4_block(self):
         return {"type": "video_url", "video_url": {
@@ -369,33 +368,50 @@ class TestMultiVideo:
                    + base64.b64encode(make_minimal_mp4_504()).decode(),
         }}
 
+    def _mp4_url_block(self):
+        """A URL-form video_url block for a single video_400x300.mp4 (COS direct link).
+        Uses the minimum resolution to reduce gateway download pressure.
+        """
+        return {"type": "video_url", "video_url": {
+            "url": fixture_video_url("video_400x300.mp4"),
+        }}
+
     def test_04_01_count_at_max(self):
-        """5 videos (spec upper bound) -> API should accept (HTTP 200)."""
-        content = [self._mp4_block() for _ in range(5)]
+        """20 video URLs (spec updated upper bound) -> the endpoint should accept (HTTP 200)."""
+        content = [self._mp4_url_block() for _ in range(20)]
         content.append({"type": "text", "text": "How many videos do you see?"})
-        r = oai_chat({"messages": [{"role": "user", "content": content}]})
+        r = oai_chat({"messages": [{"role": "user", "content": content}]}, timeout=600)
         assert r["status"] == 200, (
-            f"04_01 video count=5 (at max) HTTP={r['status']}: "
+            f"04_01 video count=20 (at max, URL form) HTTP={r['status']}: "
             f"{str(r.get('body'))[:300]}"
         )
 
     def test_04_02_count_over_max(self):
-        """10 videos (> spec upper bound 5) -> M3 official does not enforce reject in practice; verify HTTP 200 + non-empty content."""
-        content = [self._mp4_block() for _ in range(10)]
+        """21 video URLs (> spec updated upper bound 20) -> 4xx outright reject OR 200 + non-empty response.
+        Counter-example: HTTP 200 but content is empty (model produced no textual reply).
+        Empirically the official M3 returns 400 `the num of video is larger than the limit: 20` (hard block);
+        some providers may let it through; 200 + content is also considered compliant (aligned with image 12_02).
+        """
+        content = [self._mp4_url_block() for _ in range(21)]
         content.append({"type": "text", "text": "How many?"})
-        r = oai_chat({"messages": [{"role": "user", "content": content}]})
-        assert r["status"] == 200, (
-            f"04_02 video count=10 expected HTTP 200, got {r['status']}: "
+        r = oai_chat({"messages": [{"role": "user", "content": content}]}, timeout=600)
+        status = r["status"]
+        if 400 <= status < 500:
+            return
+        assert status == 200, (
+            f"04_02 video count=21 (URL form) should be 200 or 4xx, got {status}: "
             f"{str(r.get('body'))[:300]}"
         )
         resp_content = get_oai_content(r)
         assert resp_content and resp_content.strip(), (
-            f"04_02 video count=10 expected non-empty content, got: {resp_content!r}"
+            f"04_02 video count=21 returned 200 but content is empty; "
+            f"server should either reject 4xx or produce a valid response. "
+            f"body: {str(r.get('body'))[:300]}"
         )
 
     @pytest.mark.slow
     def test_04_03_multi_video_3(self):
-        """3 real_2s.mp4 real videos stacked, allow 200/4xx."""
+        """3 stacked real_2s.mp4 real videos; allow 200/4xx."""
         vid = real_video_b64("real_2s.mp4")
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -413,7 +429,7 @@ class TestMultiVideo:
 
     @pytest.mark.slow
     def test_04_04_multi_video_5(self):
-        """5 real_2s.mp4 real videos stacked (spec upper bound), allow 200/4xx."""
+        """5 stacked real_2s.mp4 real videos (spec upper bound); allow 200/4xx."""
         vid = real_video_b64("real_2s.mp4")
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -428,9 +444,9 @@ class TestMultiVideo:
         )
 
     def test_04_05_multi_video_b64_url_mix(self):
-        """Mixed form: base64 + URL multi-video with two different load forms, allow 200/4xx.
+        """Mixed form: two clips loaded via different input forms, base64 + URL; allow 200/4xx.
 
-        Different from 04_01..04_04's "all base64 same segment" coverage of input forms.
+        Different input-form coverage from the "all-base64 same-clip" cases in 04_01..04_04.
         """
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -450,7 +466,7 @@ class TestMultiVideo:
 # ============================================================
 
 class TestImageVideoMixed:
-    """Mixed multimodal input with image + video in the same message."""
+    """Mixed multimodal input with images + videos in the same message."""
 
     def test_05_01_one_image_one_video(self):
         """1 image (PNG) + 1 video (real_2s) -> HTTP 200 (multimodal mix)."""
@@ -469,7 +485,7 @@ class TestImageVideoMixed:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_05_02_image_video_stream_variant(self, stream):
-        """Image+video mixed -> both non-stream/stream paths should return 200."""
+        """Image + video mixed -> both non-stream and stream paths should return 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": png_base64()}},
@@ -485,7 +501,7 @@ class TestImageVideoMixed:
 
     @pytest.mark.slow
     def test_05_03_mixed_3img_1vid(self):
-        """3 real images (sx1×3) + 1 real video (real_2s) mixed -> allow 200/4xx."""
+        """3 real images (sx1 x3) + 1 real video (real_2s) mix -> allow 200/4xx."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": real_image_b64_for_video("sx1.jpg", "image/jpeg")}},
@@ -503,7 +519,7 @@ class TestImageVideoMixed:
 
     @pytest.mark.slow
     def test_05_04_mixed_1img_2vid(self):
-        """1 real image (sx1) + 2 real videos (real_2s + flower-video) mixed -> allow 200/4xx."""
+        """1 real image (sx1) + 2 real videos (real_2s + flower-video) mix -> allow 200/4xx."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": real_image_b64_for_video("sx1.jpg", "image/jpeg")}},
@@ -528,7 +544,7 @@ class TestFpsParam:
 
     @pytest.mark.parametrize("fps", [0.5, 1, 2], ids=["fps=0.5", "fps=1", "fps=2"])
     def test_06_01_fps_real_video(self, fps):
-        """fps in {0.5, 1, 2} with 12s_real.mp4 real video -> HTTP 200."""
+        """fps in {0.5, 1, 2} on 12s_real.mp4 real video -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -546,7 +562,7 @@ class TestFpsParam:
     @pytest.mark.parametrize("fps", [0.5, 1.0, 2.0, 5.0],
                              ids=["fps=0.5", "fps=1.0", "fps=2.0", "fps=5.0"])
     def test_06_02_valid_fps(self, fps):
-        """Each valid fps tier in [0.2, 5], with 12s_real.mp4 -> HTTP 200."""
+        """Each valid fps in [0.2, 5] tier on 12s_real.mp4 -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -565,7 +581,7 @@ class TestFpsParam:
     @pytest.mark.parametrize("fps", [0.1, 0.0, -1, 10.0, 100],
                              ids=["fps=0.1", "fps=0", "fps=-1", "fps=10", "fps=100"])
     def test_06_03_invalid_fps(self, fps):
-        """Out-of-range values (< 0.2 or > 5); server may reject or leniently accept; soft assertion 200/400/422/500."""
+        """Out-of-range values (< 0.2 or > 5); server may reject or leniently accept; soft assert 200/400/422/500."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -593,19 +609,19 @@ class TestFpsParam:
 
     @pytest.mark.parametrize("fps", [0.1, 0.0, -1], ids=["0.1", "0.0", "-1"])
     def test_06_06_fps_below_min_short_fixture(self, fps):
-        """fps<0.2 with video_640x480.mp4 (short fixture) -> soft assert 200/400/422, record actual behavior.
+        """fps<0.2 on video_640x480.mp4 (short fixture) -> soft assert 200/400/422; records actual behavior.
 
-        Complementary to 06_03: 06_03 uses 12s_real.mp4 (long video) to cover the full out-of-range set,
-        06_06 uses a short fixture to cover the 3 common out-of-range values near the lower bound, for quick diagnostics.
+        Complements 06_03: 06_03 uses 12s_real.mp4 (long video) for full out-of-range coverage;
+        06_06 uses a short fixture to cover the 3 common out-of-range values near the lower bound for quick diagnosis.
         """
         r = oai_chat(_video_payload("video_640x480.mp4", detail="default", fps=fps))
         assert r["status"] in (200, 400, 422), f"06_06 fps={fps} HTTP={r['status']}"
 
     @pytest.mark.parametrize("fps", [5.1, 10, 1000], ids=["5.1", "10", "1000"])
     def test_06_07_fps_above_max_short_fixture(self, fps):
-        """fps>5 with video_640x480.mp4 (short fixture) -> soft assert 200/400/422, record actual behavior.
+        """fps>5 on video_640x480.mp4 (short fixture) -> soft assert 200/400/422; records actual behavior.
 
-        Complementary to 06_03: 06_07 covers the 3 common out-of-range values near the upper bound; the short fixture allows quick diagnostics.
+        Complements 06_03: 06_07 covers the 3 common out-of-range values near the upper bound; short fixture for quick diagnosis.
         """
         r = oai_chat(_video_payload("video_640x480.mp4", detail="default", fps=fps))
         assert r["status"] in (200, 400, 422), f"06_07 fps={fps} HTTP={r['status']}"
@@ -638,7 +654,7 @@ class TestDetailParam:
         )
 
     def test_07_02_no_detail_no_fps(self):
-        """Pass neither detail nor fps; server uses defaults (detail=default, fps=1) -> HTTP 200."""
+        """Omit both detail and fps; server uses defaults (detail=default, fps=1) -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -649,12 +665,12 @@ class TestDetailParam:
             "max_tokens": 1024,
         })
         assert r["status"] == 200, (
-            f"07_02 default params expected 200, got {r['status']}: "
+            f"07_02 默认参数 expected 200, got {r['status']}: "
             f"{str(r.get('body'))[:300]}"
         )
 
     def test_07_03_no_detail_explicit_fps(self):
-        """Only pass fps, not detail; server uses default detail=default -> HTTP 200."""
+        """Only pass fps, omit detail; server uses default detail=default -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -666,12 +682,12 @@ class TestDetailParam:
             "max_tokens": 1024,
         })
         assert r["status"] == 200, (
-            f"07_03 fps only expected 200, got {r['status']}: "
+            f"07_03 仅 fps expected 200, got {r['status']}: "
             f"{str(r.get('body'))[:300]}"
         )
 
     def test_07_04_no_fps_explicit_detail(self):
-        """Only pass detail, not fps; server uses default fps=1 -> HTTP 200."""
+        """Only pass detail, omit fps; server uses default fps=1 -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -683,15 +699,15 @@ class TestDetailParam:
             "max_tokens": 1024,
         })
         assert r["status"] == 200, (
-            f"07_04 detail only expected 200, got {r['status']}: "
+            f"07_04 仅 detail expected 200, got {r['status']}: "
             f"{str(r.get('body'))[:300]}"
         )
 
     def test_07_05_max_long_side_pixel_baseline(self):
-        """max_long_side_pixel=504 (28×18 minimum tier) + real_2s.mp4 -> HTTP 200 (smoke test for minimum-tier contract).
+        """max_long_side_pixel=504 (28x18 minimum tier) + real_2s.mp4 -> HTTP 200 (contract minimum-tier smoke).
 
-        # OAI contract: max_long_side_pixel must be a multiple of 28.
-        # This case only does smoke testing on the minimum tier; full coverage of series contract / monotonicity / out-of-range is in section 09.
+        # OAI contract: max_long_side_pixel must be a multiple of 28 (aligned by the M3 team on 2026-06-02).
+        # This case only does a minimum-tier smoke; the full contract/monotonic/out-of-range coverage lives in module §09.
         """
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -710,29 +726,29 @@ class TestDetailParam:
 
 
 # ============================================================
-# 08 resolution_tier — resolution tier / boundary / pixel upper bound
+# 08 resolution_tier — resolution tier / boundary / pixel cap
 # ============================================================
 
 class TestResolutionTier:
-    """Videos at different resolutions go through detail=default rescaling + max_total_pixels soft upper bound."""
+    """Videos at different resolutions go through detail=default scaling + max_total_pixels soft cap."""
 
     def test_08_01_tier_low_no_scale(self):
-        """400x300 video (long side 400 < default tier 672) -> HTTP 200 (no rescaling)."""
+        """400x300 video (long side 400 < default tier 672) -> HTTP 200 (no scale)."""
         r = oai_chat(_video_payload("video_400x300.mp4", detail="default"))
         _assert_basic_ok(r, "08_01 small_video")
 
     def test_08_02_tier_low_scale_down(self):
-        """1280x720 video (long side 1280 > default tier 672) -> per-frame rescaling expected, HTTP 200."""
+        """1280x720 video (long side 1280 > default tier 672) -> should scale per frame, HTTP 200."""
         r = oai_chat(_video_payload("video_1280x720.mp4", detail="default"))
         _assert_basic_ok(r, "08_02 medium_video")
 
     def test_08_03_tier_default_no_scale(self):
-        """640x480 video (long side 640 < default tier 672) -> HTTP 200 (no rescaling)."""
+        """640x480 video (long side 640 < default tier 672) -> HTTP 200 (no scale)."""
         r = oai_chat(_video_payload("video_640x480.mp4", detail="default"))
         _assert_basic_ok(r, "08_03 below_default")
 
     def test_08_04_tier_default_scale_down(self):
-        """1920x1080 video (long side 1920 > default tier 672) -> per-frame rescaling expected, HTTP 200."""
+        """1920x1080 video (long side 1920 > default tier 672) -> should scale per frame, HTTP 200."""
         r = oai_chat(_video_payload("video_1920x1080.mp4", detail="default"))
         _assert_basic_ok(r, "08_04 above_default")
 
@@ -742,7 +758,7 @@ class TestResolutionTier:
         _assert_basic_ok(r, "08_05 medium_large_video")
 
     def test_08_06_tier_high_scale_down(self):
-        """3840x2160 video (long side 3840 > default tier 672) -> per-frame rescaling expected, HTTP 200."""
+        """3840x2160 video (long side 3840 > default tier 672) -> should scale per frame, HTTP 200."""
         r = oai_chat(_video_payload("video_3840x2160.mp4", detail="default"))
         _assert_basic_ok(r, "08_06 large_video")
 
@@ -752,18 +768,18 @@ class TestResolutionTier:
         _assert_basic_ok(r, "08_07 boundary")
 
     def test_08_08_tier_consistency(self):
-        """1920x1080 large video + default tier -> HTTP 200 + prompt_tokens > 0 (basic smoke test)."""
+        """1920x1080 large video + default tier -> HTTP 200 + prompt_tokens > 0 (basic smoke)."""
         r = oai_chat(_video_payload("video_1920x1080.mp4", detail="default"))
         assert r["status"] == 200, f"08_08 HTTP={r['status']}"
         pt = _get_prompt_tokens(r)
         assert pt > 0, f"08_08 prompt_tokens={pt}"
 
     def test_08_09_max_total_pixels_exceeded(self):
-        """1-second 3840x2160 + fps=5, approaching the max_total_pixels=301,056,000 soft upper bound -> 200/4xx.
+        """1-second 3840x2160 + fps=5, approaching the max_total_pixels=301,056,000 soft cap -> 200/4xx.
 
-        # Current fixtures are all 1-second videos and not enough to actually trip the upper bound;
-        # only does "high fps large resolution" acceptance assertion; actual over-limit testing
-        # requires longer-duration fixtures.
+        # Current fixtures are all 1-second videos and cannot truly trigger the cap; this only
+        # asserts acceptance of "high fps + large resolution"; a true over-limit test needs a
+        # longer-duration fixture.
         """
         r = oai_chat(_video_payload("video_3840x2160.mp4", detail="default", fps=5))
         assert r["status"] in (200, 400, 413, 422), (
@@ -774,12 +790,12 @@ class TestResolutionTier:
 # ============================================================
 # 09 max_long_side_pixel — max_long_side_pixel (multiple of 28) contract
 # ============================================================
-# OAI contract: max_long_side_pixel must be a multiple of 28.
-# The three video tiers use 504 (28×18) / 1008 (28×36) / 2016 (28×72);
-# the old (504, 672, 1280) combination had 672/1280 that were not multiples of 28 and is deprecated.
+# OAI contract: max_long_side_pixel must be a multiple of 28 (aligned by the M3 team on 2026-06-02).
+# Video three tiers use 504 (28x18) / 1008 (28x36) / 2016 (28x72);
+# the legacy (504, 672, 1280) combination had 672/1280 not multiples of 28 and is deprecated.
 
 class TestMaxLongSidePixel:
-    """max_long_side_pixel three tiers (504/1008/2016) contract + monotonicity + out-of-range soft assertions."""
+    """max_long_side_pixel three tiers (504/1008/2016) contract + monotonicity + out-of-range soft assert."""
 
     @pytest.mark.parametrize("mlsp,tier", [
         (504, "low"),
@@ -787,7 +803,7 @@ class TestMaxLongSidePixel:
         (2016, "high"),
     ], ids=["low=504", "default=1008", "high=2016"])
     def test_09_01_tier_value(self, mlsp, tier):
-        """Each of the three tiers (504/1008/2016) fed a 3840x2160 real video (long side > 2016, all trigger rescaling) -> HTTP 200 + prompt_tokens > 0."""
+        """Each of the three tiers (504/1008/2016) fed with the 3840x2160 real video (long side > 2016, all trigger scaling) -> HTTP 200 + prompt_tokens > 0."""
         fixture_name = "video_3840x2160.mp4"
         video_url_obj = {
             "url": fixture_video_base64(fixture_name),
@@ -802,7 +818,7 @@ class TestMaxLongSidePixel:
         _assert_basic_ok(r, f"09_01 tier={tier} mlsp={mlsp} [{fixture_name}]")
 
     def test_09_02_monotonic(self):
-        """Same video with each of the three tiers, prompt_tokens strictly monotonic 504 < 1008 < 2016."""
+        """Same video with each of the three tiers set; prompt_tokens strictly monotonic 504 < 1008 < 2016."""
         fixture_name = "video_3840x2160.mp4"
         fixture_url = fixture_video_base64(fixture_name)
         tokens = {}
@@ -819,14 +835,14 @@ class TestMaxLongSidePixel:
             _assert_basic_ok(r, f"09_02 monotonic tier={tier} mlsp={mlsp}")
             tokens[mlsp] = _get_prompt_tokens(r)
         assert tokens[504] < tokens[1008] < tokens[2016], (
-            f"09_02 monotonic: larger max_long_side_pixel should yield larger prompt_tokens, "
+            f"09_02 monotonic: max_long_side_pixel 越大 prompt_tokens 应越大, "
             f"got {tokens} (expected 504 < 1008 < 2016)"
         )
 
     @pytest.mark.parametrize("invalid_value", [140, 3612, 0, -28],
                              ids=["below_min_28x5", "above_max_28x129", "zero", "negative_28"])
     def test_09_03_out_of_range(self, invalid_value):
-        """Outside spec range [150, 3584] (<150 / >3584 / 0 / negative, all multiples of 28) -> soft assert 200/400/413/422."""
+        """Outside the [150, 3584] spec range (<150 / >3584 / 0 / negative, all multiples of 28) -> soft assert 200/400/413/422."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -846,10 +862,10 @@ class TestMaxLongSidePixel:
 # ============================================================
 
 class TestVideoSizeLimit:
-    """Video <= 50 MB; URL/Base64 each covers pass/reject sides plus padded equivalents."""
+    """Video <= 50 MB; URL/Base64 each cover both pass/reject sides, plus a padded equivalent."""
 
     def test_10_01_url_under_50mb(self):
-        """URL form: ~47.4 MB MP4 within the 50 MB upper bound, should be accepted."""
+        """URL form: ~47.4 MB MP4 within the 50 MB cap should be accepted."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": size_fixture_url("video_49mb.mp4")}},
@@ -859,7 +875,7 @@ class TestVideoSizeLimit:
         assert_oai_success(r)
 
     def test_10_02_url_over_50mb(self):
-        """URL form: ~52 MB MP4 exceeds the 50 MB upper bound; server should reject after download (4xx)."""
+        """URL form: ~52 MB MP4 over the 50 MB cap; server should reject after download (4xx)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": size_fixture_url("video_51mb.mp4")}},
@@ -872,7 +888,7 @@ class TestVideoSizeLimit:
 
     @pytest.mark.timeout(600)
     def test_10_03_base64_under_50mb(self):
-        """Base64 form: ~47.4 MB MP4 within the 50 MB upper bound, should be accepted."""
+        """Base64 form: ~47.4 MB MP4 within the 50 MB cap should be accepted."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": size_fixture_data_url("video_49mb.mp4")}},
@@ -883,7 +899,7 @@ class TestVideoSizeLimit:
 
     @pytest.mark.timeout(600)
     def test_10_04_base64_over_50mb(self):
-        """Base64 form: ~52 MB MP4 exceeds the 50 MB upper bound, should be rejected (4xx)."""
+        """Base64 form: ~52 MB MP4 over the 50 MB cap should be rejected (4xx)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": size_fixture_data_url("video_51mb.mp4")}},
@@ -897,9 +913,9 @@ class TestVideoSizeLimit:
     @pytest.mark.slow
     @pytest.mark.timeout(600)
     def test_10_05_padded_over_50mb_rejected(self):
-        """real_2s.mp4 + null padding to 51MB (real header + null fill) -> should be rejected (4xx or 500).
+        """real_2s.mp4 + null padding to 51MB (real header + null padding) -> should be rejected (4xx or 500).
 
-        Complementary to 10_04 clean 52MB fixture; covers different forms of "oversized video" input.
+        Complements 10_04 (clean 52MB fixture), covering different forms of "oversize video" input.
         """
         raw = (Path(__file__).parent / "fixtures" / "m3_test_videos" / "real_2s.mp4").read_bytes()
         target_size = 51 * 1024 * 1024
@@ -920,18 +936,18 @@ class TestVideoSizeLimit:
 
 
 # ============================================================
-# 11 long_video — long videos (5/10/20/30 min)
+# 11 long_video — long video (5/10/20/30 min)
 # ============================================================
-# Defaults to reading D_300s/D_600s/D_1200s/D_1800s.mp4 from local fixtures/m3_test_videos/;
-# to use a different set of long videos, set env var `M3_LONG_VIDEO_DIR` to override.
-# Cases in this section auto-skip when the fixture is missing.
+# fixtures are not committed to git (each file > 30MB); specify the directory via the
+# `M3_LONG_VIDEO_DIR` environment variable (default reference implementation lives at
+# /Users/minimax/Downloads/M3/assets/videos/duration/).
 
 def _long_video_present(name: str) -> bool:
     return long_video_path(name).exists()
 
 
 class TestLongVideo:
-    """5/10/20/30 minute video duration and upper-bound test (skipif env)."""
+    """5/10/20/30 minute video latency and upper-bound tests (skipif env)."""
 
     @pytest.mark.slow
     @pytest.mark.skipif(
@@ -1025,14 +1041,14 @@ class TestLongVideo:
 # ============================================================
 
 class TestMediaGradient:
-    """Media gradient: video resolution gradient (1080P/2K) and multi-video count gradient (3/5 segments)."""
+    """Media gradient: video resolution gradient (1080P/2K) and multi-video count gradient (3/5 clips)."""
 
     @pytest.mark.parametrize("filename,label", [
         ("video_1920x1080.mp4", "1080P"),
         ("video_3840x2160.mp4", "2K"),
     ], ids=["1080P", "2K"])
     def test_12_01_resolution_gradient(self, filename, label):
-        """Video resolution gradient (1080P / 2K), using existing fixtures -> HTTP 200."""
+        """Video resolution gradient (1080P / 2K) using existing fixtures -> HTTP 200."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": fixture_video_base64(filename)}},
@@ -1048,7 +1064,7 @@ class TestMediaGradient:
     @pytest.mark.slow
     @pytest.mark.parametrize("count", [3, 5], ids=["count=3", "count=5"])
     def test_12_02_multi_video_gradient(self, count):
-        """Multi-video gradient (3 / 5 segments stacked), using real_2s.mp4 -> allow 200/4xx."""
+        """Multi-video gradient (3 / 5 stacked clips) using real_2s.mp4 -> allow 200/4xx."""
         vid = real_video_b64("real_2s.mp4")
         r = oai_chat({
             "messages": [{"role": "user", "content": [
@@ -1063,7 +1079,7 @@ class TestMediaGradient:
         )
 
     def test_12_03_video_temporal(self):
-        """real_2s.mp4 + What happens in this video -> content > 10 chars."""
+        """real_2s.mp4 + What happens in this video -> content > 10 characters."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": real_video_b64("real_2s.mp4")}},
@@ -1101,11 +1117,11 @@ class TestMediaGradient:
 # ============================================================
 
 class TestVideoExtension:
-    """Compatibility of extended protocol fields in video scenarios."""
+    """Compatibility of extension protocol fields in video scenarios."""
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_13_01_reasoning_split(self, stream):
-        """Video + reasoning_split + thinking adaptive, both stream and non-stream paths; allow 200/400 (extension fields may not be supported)."""
+        """Video + reasoning_split + thinking adaptive, both stream and non-stream paths; allow 200/400 (extension fields may be unsupported)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": real_video_b64("real_2s.mp4")}},
@@ -1126,10 +1142,10 @@ class TestVideoExtension:
 # ============================================================
 
 class TestVideoErrorCodes:
-    """Video-related error codes (split from TestOAIErrors)."""
+    """Video-related error codes (split out from TestOAIErrors)."""
 
     def test_14_01_fps_out_of_range(self):
-        """fps=100 significantly out of range -> HTTP 400 (hard assertion)."""
+        """fps=100 is significantly out of range -> HTTP 400 (hard assert)."""
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": mp4_base64(), "fps": 100}},

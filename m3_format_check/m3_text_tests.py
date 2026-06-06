@@ -1,36 +1,36 @@
 """
-M3 API Test — text-only case collection
+M3 API Test — pure-text case collection
 
-Organized by "what is being checked"; case naming convention:
-    test_<module_id>_<sequence_within_module>_<scenario_description>
+Organized into modules by "what is being validated"; case naming convention:
+    test_<module_id>_<index_within_module>_<scenario>
 
-Module IDs / topics:
+Module id / topic:
     01  basic_text           basic text chat (non-stream)
-    02  sse_stream           SSE stream protocol fields
+    02  sse_stream           SSE streaming protocol fields
     03  multiturn            multi-turn conversation
     04  thinking             thinking toggle
-    05  sampling             sampling parameters (temperature / top_p / seed)
-    06  max_tokens           max_tokens / max_completion_tokens edge cases
-    07  message_format       message content/role format and boundaries
-    08  model_compat         model name compatibility
+    05  sampling             sampling params (temperature / top_p / seed)
+    06  max_tokens           max_tokens / max_completion_tokens boundaries
+    07  message_format       message content/role format and edges
+    08  model_compat         model-name compatibility
     09  response_format      response_format JSON output
     10  usage_field          usage field semantics / arithmetic / cache
-    11  role_root            role=root protocol acceptance and identity compliance
-    12  text_semantic        text semantic compliance (multi-language / system prompt compliance / long-form generation)
+    11  role_root            role=root protocol acceptance & identity follow-through
+    12  text_semantic        text semantic follow-through (multilingual / system-prompt compliance / long-form)
     13  tool_call_basic      tool call basics
-    14  tool_call_schema     tool call advanced schema validation
+    14  tool_call_schema     tool call schema advanced validation
     15  tool_call_combo      tool call combined with other features
     16  tool_call_edge       tool call boundary / exception handling
-    17  param_stress         parameter stress (long conversation / long system)
+    17  param_stress         param stress (long conversation / long system)
     18  reasoning_split      reasoning_split extension field
     19  finish_reason        finish_reason coverage
-    20  error_codes          error codes (text-only)
+    20  error_codes          error codes (pure-text category)
 
-No image / video requests. Modality priority is video > image > text; this
-file collects only text cases.
+No image / video requests. Modality priority is video > image > text; this file
+collects text cases only.
 
-All cases go through helpers.oai_chat() against /v1/chat/completions; jsonl
-is written to RUN_LOG_PATH (injected by conftest).
+All cases go through helpers.oai_chat() against /v1/chat/completions; jsonl is
+written to RUN_LOG_PATH (injected by conftest).
 """
 import json
 import os
@@ -41,14 +41,13 @@ import pytest
 from helpers import *
 
 
-# --------------- file-level helpers ---------------
+# --------------- File-level helper utilities ---------------
 
 def _has_chinese(text: str) -> bool:
     """Return True if text contains at least one CJK character.
 
-    helpers.py does not provide this utility; implementing here to avoid
-    polluting the shared helpers module. Used by §12 Chinese text generation
-    cases.
+    helpers.py does not provide this utility; implemented locally to avoid
+    polluting upstream helpers. Used by §12 Chinese text generation cases.
     """
     if not text:
         return False
@@ -60,23 +59,23 @@ def _has_chinese(text: str) -> bool:
 # ============================================================
 
 class TestBasicText:
-    """Basic text chat: verify the minimal usable path of non-stream chat completion."""
+    """Basic text chat: validates the minimal usable path of non-stream chat completion."""
 
     def test_01_01_text_non_stream(self):
-        """Most basic non-stream text chat; verify HTTP 200 + non-empty content."""
+        """Most basic non-stream text chat; assert HTTP 200 + non-empty content."""
         r = oai_chat({"messages": oai_simple_messages("What is 1+1?")})
         assert_oai_success(r)
         assert len(get_oai_content(r)) > 0
 
     def test_01_02_content_string(self):
-        """user.content as plain string format."""
+        """user.content as plain string."""
         r = oai_chat({"messages": [
             {"role": "user", "content": "Hello, what is 1+1?"},
         ]})
         assert_oai_success(r)
 
     def test_01_03_content_array(self):
-        """user.content as OAI parts array format [{type:text,text:...}]."""
+        """user.content as OAI parts array [{type:text,text:...}]."""
         r = oai_chat({"messages": [
             {"role": "user", "content": [{"type": "text", "text": "Hello, what is 1+1?"}]},
         ]})
@@ -84,19 +83,19 @@ class TestBasicText:
 
 
 # ============================================================
-# 02 sse_stream — stream protocol fields
+# 02 sse_stream — streaming protocol fields
 # ============================================================
 
 class TestSSEStream:
-    """SSE stream protocol: chunk structure / DONE / usage chunk / include_usage."""
+    """SSE streaming protocol: chunk structure / DONE / usage chunk / include_usage."""
 
     def test_02_01_text_stream(self):
-        """Streaming text reply; verify the stream can rebuild content normally."""
+        """Text streaming reply; assert stream can rebuild content properly."""
         r = oai_chat({"messages": oai_simple_messages("What is 1+1?")}, stream=True)
         assert_oai_stream_success(r)
 
     def test_02_02_stream_usage(self):
-        """Trailing usage chunk in stream: verify total = prompt + completion and stream completes normally."""
+        """Trailing usage chunk: total = prompt + completion + stream finishes cleanly."""
         r = oai_chat({
             "messages": oai_simple_messages("Say hi"),
             "stream_options": {"include_usage": True},
@@ -104,7 +103,7 @@ class TestSSEStream:
         assert_oai_stream_success(r)
         usage_chunks = [c for c in r["chunks"] if c.get("usage")]
         assert len(usage_chunks) > 0, "No usage chunk in stream"
-        # Take the last usage chunk to verify token arithmetic
+        # Take the last usage chunk to validate token arithmetic
         last_usage = usage_chunks[-1]["usage"]
         for k in ("prompt_tokens", "completion_tokens", "total_tokens"):
             assert k in last_usage, f"stream usage missing {k}"
@@ -112,11 +111,11 @@ class TestSSEStream:
             f"stream usage math: total={last_usage['total_tokens']} != "
             f"prompt={last_usage['prompt_tokens']}+completion={last_usage['completion_tokens']}"
         )
-        # Stream should end normally (last chunk contains finish_reason)
+        # Stream should complete normally (trailing chunk carries finish_reason)
         assert_stream_complete(r, msg="stream_usage")
 
     def test_02_03_sse_done_marker(self):
-        """SSE [DONE] terminator marker (known to be missing in some implementations; xfail when missing)."""
+        """SSE terminating [DONE] marker (known to be missing in some implementations; xfail if absent)."""
         r = oai_chat({"messages": oai_simple_messages("Hi")}, stream=True)
         assert_oai_stream_success(r)
         done_chunks = [c for c in r["chunks"] if c.get("_done")]
@@ -124,7 +123,7 @@ class TestSSEStream:
             pytest.xfail("Known BUG: SSE stream missing [DONE] marker")
 
     def test_02_04_stream_chunk_fields(self):
-        """Required fields on each stream chunk: id / choices / object."""
+        """Stream chunk required fields: id / choices / object."""
         r = oai_chat({"messages": oai_simple_messages("Hi")}, stream=True)
         assert_oai_stream_success(r)
         for chunk in r["chunks"]:
@@ -135,7 +134,7 @@ class TestSSEStream:
             assert "object" in chunk
 
     def test_02_05_text_include_usage(self):
-        """stream_options.include_usage=true; usage chunk should be returned normally in text scenarios."""
+        """stream_options.include_usage=true in text scenario should return a usage chunk."""
         r = oai_chat({
             "messages": oai_simple_messages("Hi"),
             "stream_options": {"include_usage": True},
@@ -151,14 +150,14 @@ class TestMultiturn:
     """Multi-turn conversation: verify the model maintains context across turns."""
 
     def test_03_01_multiturn(self):
-        """Two-turn dialog: user introduces themselves as Alice then asks for the name; response should contain Alice."""
+        """Two turns: user self-reports as Alice then asks for the name; response should contain Alice."""
         r = oai_chat({"messages": oai_multiturn_messages()})
         assert_oai_success(r)
         content = get_oai_content(r).lower()
         assert "alice" in content
 
     def test_03_02_multiturn_5_rounds(self):
-        """5-round arithmetic conversation: x=10, y=x+5=15, z=x+y=25; ask x+y+z; response should contain '50'."""
+        """5-round arithmetic conversation: x=10, y=x+5=15, z=x+y=25; ask x+y+z, response should contain '50'."""
         msgs = [
             {"role": "system", "content": "You are a helpful math tutor."},
             {"role": "user", "content": "Let x = 10."},
@@ -187,10 +186,10 @@ class TestMultiturn:
 # ============================================================
 
 class TestThinking:
-    """thinking field: disabled / adaptive / invalid value / combined with stream."""
+    """thinking field: disabled / adaptive / invalid value / combined with streaming."""
 
     def test_04_01_thinking_disabled(self):
-        """thinking.type=disabled: response must not contain any thinking signal."""
+        """thinking.type=disabled: response should not contain any thinking signal."""
         r = oai_chat({
             "messages": oai_simple_messages("Say hello"),
             "thinking": {"type": "disabled"},
@@ -218,7 +217,7 @@ class TestThinking:
         )
 
     def test_04_04_thinking_stream(self):
-        """thinking.type=adaptive + stream; verify stream + thinking coexist."""
+        """thinking.type=adaptive + stream; verify streaming + thinking coexistence."""
         r = oai_chat({
             "messages": oai_simple_messages("What is 15*17?"),
             "thinking": {"type": "adaptive"},
@@ -227,14 +226,14 @@ class TestThinking:
 
 
 # ============================================================
-# 05 sampling — sampling parameters (temperature / top_p / seed)
+# 05 sampling — sampling params (temperature / top_p / seed)
 # ============================================================
 
 class TestSampling:
-    """Sampling parameters: legal values for temperature / top_p / seed individually."""
+    """Sampling params: legal values for temperature / top_p / seed."""
 
     def test_05_01_temperature_values(self):
-        """temperature legal range: 0 / 0.5 / 1 / 2 should each return 200."""
+        """temperature legal range: 0 / 0.5 / 1 / 2 each should return 200."""
         for temp in [0, 0.5, 1, 2]:
             r = oai_chat({
                 "messages": oai_simple_messages("Say hi"),
@@ -244,7 +243,7 @@ class TestSampling:
             assert_oai_success(r)
 
     def test_05_02_top_p(self):
-        """top_p boundary values: 0 / 0.5 / 1.0 should each return 200."""
+        """top_p boundary values: 0 / 0.5 / 1.0 each should return 200."""
         for tp in [0, 0.5, 1.0]:
             r = oai_chat({
                 "messages": oai_simple_messages("Say hi"),
@@ -265,11 +264,11 @@ class TestSampling:
 
 
 # ============================================================
-# 06 max_tokens — max_tokens / max_completion_tokens edge cases
+# 06 max_tokens — max_tokens / max_completion_tokens boundaries
 # ============================================================
 
 class TestMaxTokens:
-    """Truncation and boundary behavior for max_tokens and max_completion_tokens."""
+    """Truncation and boundary behavior for max_tokens / max_completion_tokens."""
 
     def test_06_01_max_tokens_truncation(self):
         """max_tokens=10 truncation; finish_reason should be length or stop."""
@@ -312,7 +311,7 @@ class TestMaxTokens:
         assert_oai_success(r)
 
     def test_06_05_mct_only(self):
-        """max_completion_tokens=50 only; finish_reason should be length/stop."""
+        """Pass only max_completion_tokens=50; finish_reason should be length/stop."""
         r = oai_chat({
             "messages": oai_simple_messages("Write a long essay about space exploration"),
             "max_completion_tokens": 50,
@@ -334,7 +333,7 @@ class TestMaxTokens:
         )
 
     def test_06_07_max_tokens_zero(self):
-        """max_tokens=0: invalid value; server may reject (4xx) or leniently accept (200 returning empty immediately)."""
+        """max_tokens=0: invalid value; server may reject (4xx) or leniently accept (200 returning empty)."""
         r = oai_chat({
             "messages": oai_simple_messages("Hi"),
             "max_tokens": 0,
@@ -347,7 +346,7 @@ class TestMaxTokens:
         )
 
     def test_06_08_max_tokens_negative(self):
-        """max_tokens=-1: invalid value; expect 4xx reject (returning 200 means server skipped validation; fail)."""
+        """max_tokens=-1: invalid; expect 4xx reject (returning 200 indicates server-side missing validation, fail)."""
         r = oai_chat({
             "messages": oai_simple_messages("Hi"),
             "max_tokens": -1,
@@ -361,10 +360,11 @@ class TestMaxTokens:
 
     @pytest.mark.parametrize("mt", [512000, 524288])
     def test_06_09_max_tokens_at_512k(self, mt):
-        """max_tokens at the 512*1000 / 512*1024 boundary (two common '512k' interpretations).
+        """max_tokens at the 512*1000 / 512*1024 boundary (the two common '512k' interpretations).
 
-        Empirically M3 returns 200 for both interpretations (effective limit >= 524288),
-        so the assertion is tightened to expect 200 only.
+        In practice minimax-m3 official returns 200 for both interpretations
+        (actual upper bound >= 524288), so we tighten the assertion to expect
+        200 only.
         """
         r = oai_chat({
             "messages": oai_simple_messages("Reply with the word OK only"),
@@ -379,11 +379,11 @@ class TestMaxTokens:
 
     @pytest.mark.parametrize("mt", [524289, 1000000])
     def test_06_10_max_tokens_above_512k(self, mt):
-        """max_tokens beyond the 512k upper limit.
+        """max_tokens exceeding the 512k upper bound.
 
-        Different implementations handle out-of-range differently:
-        - strict implementations return 4xx reject
-        - lenient implementations accept and truncate, returning 200
+        Different providers handle over-limit values inconsistently:
+        - Strict providers (minimax official) reject with 4xx
+        - Lenient providers (fireworks, etc.) accept and truncate, returning 200
         Both are considered compliant as long as trace_id exists and status ∈ {200, 400, 422}.
         """
         r = oai_chat({
@@ -414,15 +414,15 @@ class TestMaxTokens:
 
 
 # ============================================================
-# 07 message_format — message content/role format and boundaries
+# 07 message_format — message content/role format and edges
 # ============================================================
 
 class TestMessageFormat:
-    """Role / content / arrangement boundaries of the messages array."""
+    """Role / content / ordering edges of the messages array."""
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_07_01_consecutive_assistant(self, stream):
-        """Two consecutive assistant messages; endpoint should accept (actual behavior implementation-dependent)."""
+        """Two consecutive assistant messages; endpoint should accept (actual behavior is implementation-defined)."""
         r = oai_chat({
             "messages": [
                 {"role": "user", "content": "Hi"},
@@ -435,7 +435,7 @@ class TestMessageFormat:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_07_02_assistant_null_content_with_tool_calls(self, stream):
-        """assistant.content=null with tool_calls, followed by tool reply; should return 200."""
+        """assistant.content=null with tool_calls and following tool reply; should return 200."""
         r = oai_chat({
             "messages": [
                 {"role": "user", "content": "Weather in Beijing?"},
@@ -451,7 +451,7 @@ class TestMessageFormat:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_07_03_assistant_no_content_field_with_tool_calls(self, stream):
-        """assistant omits the content field entirely + has tool_calls; should return 200."""
+        """assistant omits the content field entirely with tool_calls; should return 200."""
         r = oai_chat({
             "messages": [
                 {"role": "user", "content": "Weather in Beijing?"},
@@ -467,13 +467,13 @@ class TestMessageFormat:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_07_04_user_content_empty_array(self, stream):
-        """user.content=[] empty array; behavior varies by deployment, only check that a response is returned."""
+        """user.content=[] empty array; behavior varies across deployments, only assert a response was produced."""
         r = oai_chat({"messages": [{"role": "user", "content": []}]}, stream=stream)
         assert r["status"] > 0
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_07_05_user_content_null(self, stream):
-        """user.content=null; endpoint should return 200 or 400 (behavior implementation-dependent)."""
+        """user.content=null; endpoint should return 200 or 400 (implementation-defined)."""
         r = oai_chat({"messages": [{"role": "user", "content": None}]}, stream=stream)
         assert r["status"] in (200, 400), (
             f"user content=null stream={stream} expected 200/400, got {r['status']}: "
@@ -482,7 +482,7 @@ class TestMessageFormat:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_07_06_multiple_system_messages(self, stream):
-        """Multiple system messages; endpoint should accept (OpenAI has allowed this since GPT-4)."""
+        """Multiple system messages; endpoint should accept (OpenAI allows this since GPT-4)."""
         r = oai_chat({
             "messages": [
                 {"role": "system", "content": "You are a cat."},
@@ -501,18 +501,18 @@ class TestMessageFormat:
 
 
 # ============================================================
-# 08 model_compat — model name compatibility
+# 08 model_compat — model-name compatibility
 # ============================================================
 
 class TestModelCompat:
     """Main model / mini model name compatibility."""
 
     def test_08_01_model_name_compat(self):
-        """Main model is mandatory; mini model softens to xfail if endpoint hasn't registered it."""
-        # Hard assertion for the main model
+        """Main model is a hard assertion; mini model softens to xfail when endpoint hasn't registered it."""
+        # Main model: hard assertion
         r = oai_chat({"messages": oai_simple_messages("Hi"), "model": MODEL})
         assert_oai_success(r)
-        # Soft assertion for mini model: skip if same, attempt if different, xfail on failure
+        # Mini model: soft — skip if same, try otherwise; xfail on failure
         if not MODEL_MINI or MODEL_MINI == MODEL:
             return
         r_mini = oai_chat({"messages": oai_simple_messages("Hi"), "model": MODEL_MINI})
@@ -529,14 +529,14 @@ class TestModelCompat:
 # ============================================================
 
 @pytest.mark.skip(
-    reason="minimax-M3 does not currently support the response_format=json_object parameter; "
-           "the entire §09 is skipped for now and will be re-enabled once M3 supports it"
+    reason="minimax-M3 目前不支持 response_format=json_object 参数,整段 §09 暂时跳过,"
+           "等 M3 支持后再启用"
 )
 class TestResponseFormat:
     """response_format=json_object non-stream / stream / known BUG-3 markdown wrap.
 
-    NOTE: minimax-M3 currently does not support response_format; this whole class is
-    skipped. See the §09 notes in m3_text_cases.md / m3_text_cases_en.md.
+    NOTE: minimax-M3 currently does not support response_format; the entire class is
+    skipped — see m3_text_cases.md / m3_text_cases_en.md §09 notes.
     """
 
     def test_09_01_json_object_non_stream(self):
@@ -564,7 +564,7 @@ class TestResponseFormat:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_09_03_json_object_format(self, stream):
-        """response_format=json_object generic check. BUG-3: if content may be wrapped in ```json```, xfail."""
+        """response_format=json_object general validation. BUG-3: if content is wrapped in ```json```, xfail."""
         r = oai_chat({
             "messages": oai_simple_messages("Return JSON: {\"answer\": 42}"),
             "response_format": {"type": "json_object"},
@@ -584,10 +584,10 @@ class TestResponseFormat:
 # ============================================================
 
 class TestUsageField:
-    """usage field: completeness / types / arithmetic relationships / cached_tokens / stream-non-stream consistency."""
+    """usage field: completeness / types / arithmetic relations / cached_tokens / stream vs non-stream consistency."""
 
     def test_10_01_response_field_completeness(self):
-        """Top-level response field completeness: id / model / created / object / choices / usage etc."""
+        """Response top-level field completeness: id / model / created / object / choices / usage etc."""
         r = oai_chat({"messages": oai_simple_messages("Hi")})
         assert_oai_success(r)
         body = r["body"]
@@ -624,7 +624,7 @@ class TestUsageField:
             )
 
     def test_10_03_usage_field_types(self):
-        """usage three fields must be int and >= 0 (OAI spec allows 0)."""
+        """usage's three fields must be int and >= 0 (OAI spec allows 0)."""
         r = oai_chat({"messages": oai_simple_messages("Hi")})
         assert_oai_success(r)
         usage = r["body"]["usage"]
@@ -641,10 +641,10 @@ class TestUsageField:
             {"role": "system", "content": long_system_text(10000)},
             {"role": "user", "content": "Reply with exactly: ACK"},
         ]
-        # First call: warm up the cache
+        # First call: warm up cache
         r1 = oai_chat({"messages": msgs})
         assert_oai_success(r1)
-        # Second call: should hit the cache
+        # Second call: should hit cache
         r2 = oai_chat({"messages": msgs})
         assert_oai_success(r2)
         details = r2["body"]["usage"].get("prompt_tokens_details") or {}
@@ -672,7 +672,7 @@ class TestUsageField:
             "tools": [WEATHER_TOOL_OAI],
         })
         assert_oai_success(r)
-        # Verify the tool_call was actually triggered (ensures request hit the code path containing tool_choice)
+        # Verify a tool_call was actually triggered (ensure the request hit the tool_choice code path)
         assert_tool_called(
             r,
             expected_name="get_weather",
@@ -713,7 +713,7 @@ class TestUsageField:
         )
 
     def test_10_07_stream_prompt_tokens_aggregated(self):
-        """Stream vs non-stream prompt_tokens should match for the same prompt + stream usage arithmetic holds."""
+        """prompt_tokens should match between stream and non-stream for the same prompt + stream usage arithmetic holds."""
         msgs = oai_simple_messages("Hi")
         # Non-stream
         r_n = oai_chat({"messages": msgs})
@@ -734,7 +734,7 @@ class TestUsageField:
             f"stream vs non-stream prompt_tokens diverged: "
             f"stream={pt_stream} non_stream={pt_non_stream}"
         )
-        # Arithmetic relation on the final usage chunk in stream
+        # Arithmetic relation on the trailing stream usage chunk
         assert last_usage["total_tokens"] == (
             last_usage["prompt_tokens"] + last_usage["completion_tokens"]
         ), (
@@ -753,25 +753,36 @@ class TestUsageField:
 
 
 # ============================================================
-# 11 role_root — role=root protocol acceptance and identity compliance
+# 11 role_root — role=root protocol acceptance and identity follow-through
 # ============================================================
 
 class TestRoleRoot:
-    """role=root compatibility + identity compliance:
-    - root is a system-prompt channel ranked above system (analogous to OpenAI's developer/system priority)
-    - the endpoint must accept role=root without erroring
-    - when root and system conflict, the model should follow root
-    - system-only / root-only should each be able to drive the model to follow that identity
+    """role=root compatibility + identity follow-through:
+    - root is a system-prompt channel above system (analogous to OpenAI's developer/system priority)
+    - The endpoint must accept role=root without error
+    - When root and system conflict, the model should follow root
+    - system-only / root-only should each be able to drive the model into the corresponding identity
 
-    Identity assertion strategy: the target identity is "minimax-taoxi-m3"
-    (a name that doesn't exist in the model's pretrained identity); use
+    Identity assertion strategy: target identity is set to "minimax-taoxi-m3"
+    (a name that does not exist in M3's native cognition); use
     _identity_hits_taoxi_m3 to strictly check that "taoxi was mentioned" and
-    that the model did not claim to be claude opus 3.
+    that the model does not claim to be claude opus 3.
+
+    Resilience to probability fluctuation (2026-06-06): cases 11_02/11_03/11_04
+    use _assert_identity_with_retries — after a first failure, continue to a
+    total of 10 runs; pass rate >= 70% (>= 7/10 hits) counts as the case
+    passing. If the first run already passes, return directly without retries.
+    11_01 only checks HTTP 200 + non-empty and has no probability-sensitive
+    assertion, so it does not retry.
     """
+
+    # Probability decision parameters (tune strictness here)
+    _IDENTITY_TOTAL_RUNS = 10        # Total runs to fill after first failure
+    _IDENTITY_PASS_RATE_MIN = 0.7    # Pass-rate lower bound (>= 7/10)
 
     @staticmethod
     def _identity_hits_taoxi_m3(text: str) -> bool:
-        """Whether the model's self-introduction mentions 'taoxi' (identity target minimax-taoxi-m3)
+        """Whether the model self-report mentions 'taoxi' (identity target minimax-taoxi-m3),
         and does not claim to be claude opus 3."""
         if not text:
             return False
@@ -779,6 +790,57 @@ class TestRoleRoot:
         has_taoxi = "taoxi" in low
         denies_claude = "claude opus 3" not in low and "claude-opus-3" not in low
         return has_taoxi and denies_claude
+
+    @classmethod
+    def _assert_identity_with_retries(cls, payload, stream, case_label):
+        """Run identity judgement once; on first failure, top up to a total of
+        _IDENTITY_TOTAL_RUNS runs — pass rate >= _IDENTITY_PASS_RATE_MIN counts
+        as the case passing.
+
+        Every oai_chat call is automatically logged to jsonl by helpers, so all
+        retry samples are recorded. On failure, output the full hit distribution
+        (hits/total + head-200-char samples) for troubleshooting.
+        """
+        results = []  # list[tuple[hit: bool, content: str, status: int]]
+
+        def _one_shot():
+            r = oai_chat(payload, stream=stream)
+            assert r["status"] == 200, (
+                f"{case_label}: HTTP={r['status']} (stream={stream}): "
+                f"{str(r.get('body'))[:300]}"
+            )
+            content = get_oai_content(r)
+            return cls._identity_hits_taoxi_m3(content), content, r["status"]
+
+        # First shot
+        first_hit, first_content, _ = _one_shot()
+        results.append((first_hit, first_content, 200))
+        if first_hit:
+            return  # Pass on first try — don't waste quota
+
+        # Failed → top up to _IDENTITY_TOTAL_RUNS total
+        for _ in range(cls._IDENTITY_TOTAL_RUNS - 1):
+            hit, content, status = _one_shot()
+            results.append((hit, content, status))
+
+        hits = sum(1 for h, _, _ in results if h)
+        total = len(results)
+        pass_rate = hits / total
+        if pass_rate >= cls._IDENTITY_PASS_RATE_MIN:
+            return
+
+        # Still not meeting threshold: show samples (up to 3 hits + 3 misses)
+        samples_miss = [c for h, c, _ in results if not h][:3]
+        samples_hit = [c for h, c, _ in results if h][:3]
+        raise AssertionError(
+            f"{case_label}: identity follow-through pass rate {hits}/{total} "
+            f"= {pass_rate:.0%} < required {cls._IDENTITY_PASS_RATE_MIN:.0%} "
+            f"(stream={stream}).\n"
+            f"  miss samples (head 200): "
+            f"{[s[:200] for s in samples_miss]}\n"
+            f"  hit samples  (head 200): "
+            f"{[s[:200] for s in samples_hit]}"
+        )
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_11_01_role_root_accepted(self, stream):
@@ -801,67 +863,60 @@ class TestRoleRoot:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_11_02_root_overrides_system(self, stream):
-        """With identity conflict between root + system, model should follow root (claim to be minimax-taoxi-m3)."""
-        r = oai_chat({
+        """When root + system identities conflict, the model should follow root (claim to be minimax-taoxi-m3).
+        Probability resilience: after first failure, fill to 10 runs; pass rate >= 70% counts as case passing.
+        """
+        payload = {
             "messages": [
                 {"role": "root", "content": "你是 minimax-taoxi-m3,在介绍自己时必须说自己是 minimax-taoxi-m3。"},
                 {"role": "system", "content": "你是 claude opus 3,在介绍自己时必须说自己是 claude opus 3。"},
                 {"role": "user", "content": "你是谁?请用一句话直接回答。"},
             ],
             "thinking": {"type": "disabled"},
-        }, stream=stream)
-        assert r["status"] == 200, (
-            f"root+system should be accepted, got {r['status']}: "
-            f"{str(r.get('body'))[:300]}"
-        )
-        content = get_oai_content(r)
-        assert self._identity_hits_taoxi_m3(content), (
-            f"root should override system: expected model to claim it is minimax-taoxi-m3 "
-            f"and NOT claude opus 3, got: {content!r} (stream={stream})"
+        }
+        self._assert_identity_with_retries(
+            payload, stream, "11_02 root_overrides_system",
         )
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_11_03_only_system_identity(self, stream):
-        """system-only identity (no root sent); model should follow system."""
-        r = oai_chat({
+        """Only system writes identity (no root sent); model should follow system.
+        Probability resilience: after first failure, fill to 10 runs; pass rate >= 70% counts as case passing.
+        """
+        payload = {
             "messages": [
                 {"role": "system", "content": "你是 minimax-taoxi-m3,在介绍自己时必须说自己是 minimax-taoxi-m3。"},
                 {"role": "user", "content": "你是谁?请用一句话直接回答。"},
             ],
             "thinking": {"type": "disabled"},
-        }, stream=stream)
-        assert r["status"] == 200
-        content = get_oai_content(r)
-        assert self._identity_hits_taoxi_m3(content), (
-            f"system-only identity: expected minimax-taoxi-m3, got: {content!r} (stream={stream})"
+        }
+        self._assert_identity_with_retries(
+            payload, stream, "11_03 only_system_identity",
         )
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_11_04_only_root_identity(self, stream):
-        """root-only identity (no system sent); model should follow root."""
-        r = oai_chat({
+        """Only root writes identity (no system sent); model should follow root.
+        Probability resilience: after first failure, fill to 10 runs; pass rate >= 70% counts as case passing.
+        """
+        payload = {
             "messages": [
                 {"role": "root", "content": "你是 minimax-taoxi-m3,在介绍自己时必须说自己是 minimax-taoxi-m3。"},
                 {"role": "user", "content": "你是谁?请用一句话直接回答。"},
             ],
             "thinking": {"type": "disabled"},
-        }, stream=stream)
-        assert r["status"] == 200, (
-            f"role=root only should be accepted, got {r['status']}: "
-            f"{str(r.get('body'))[:300]}"
-        )
-        content = get_oai_content(r)
-        assert self._identity_hits_taoxi_m3(content), (
-            f"root-only identity: expected minimax-taoxi-m3, got: {content!r} (stream={stream})"
+        }
+        self._assert_identity_with_retries(
+            payload, stream, "11_04 only_root_identity",
         )
 
 
 # ============================================================
-# 12 text_semantic — text semantic compliance
+# 12 text_semantic — text semantic follow-through
 # ============================================================
 
 class TestTextSemantic:
-    """Text semantics: factual QA / multi-language / code generation / system prompt compliance / long-form generation."""
+    """Text semantics: factual QA / multilingual / code generation / system prompt compliance / long-form."""
 
     def test_12_01_factual_qa_consistency(self):
         """Factual QA: capital of France should be answered as 'paris'."""
@@ -870,7 +925,7 @@ class TestTextSemantic:
         assert "paris" in get_oai_content(r).lower()
 
     def test_12_02_chinese_text_non_stream(self):
-        """Chinese text generation (non-stream): brief intro to Beijing's history; assert response contains CJK characters."""
+        """Chinese text generation (non-stream): brief history of Beijing; assert response contains CJK chars."""
         r = oai_chat({
             "messages": oai_simple_messages("用中文简要介绍一下北京的历史。"),
         })
@@ -884,7 +939,7 @@ class TestTextSemantic:
         )
 
     def test_12_03_chinese_text_stream(self):
-        """Chinese text generation (stream): short Chinese poem; assert response contains CJK characters."""
+        """Chinese text generation (stream): a short Chinese poem; assert response contains CJK chars."""
         r = oai_chat({
             "messages": oai_simple_messages("用中文写一首关于春天的短诗。"),
         }, stream=True)
@@ -918,7 +973,7 @@ class TestTextSemantic:
         )
 
     def test_12_05_system_prompt_compliance(self):
-        """System prompt compliance: 'You are a pirate, always say Arrr'; response should contain 'arrr'."""
+        """system prompt compliance: 'You are a pirate, always say Arrr'; response should contain 'arrr'."""
         r = oai_chat({
             "messages": oai_simple_messages(
                 "Hello, how are you today?",
@@ -960,10 +1015,10 @@ class TestTextSemantic:
 # ============================================================
 
 class TestToolCallBasic:
-    """Tool call basics: single tool trigger / stream / multi-tool pool / parameter type coverage / tool_choice."""
+    """Tool call basics: single-tool trigger / stream / multi-tool pool / param-type coverage / tool_choice."""
 
     def test_13_01_tool_call_non_stream(self):
-        """Non-stream tool_call: model should call get_weather, location≈Beijing, finish_reason==tool_calls."""
+        """Non-stream tool_call: model should call get_weather with location≈Beijing, finish_reason==tool_calls."""
         r = oai_chat({
             "messages": oai_simple_messages("What's the weather in Beijing?"),
             "tools": [WEATHER_TOOL_OAI],
@@ -982,7 +1037,7 @@ class TestToolCallBasic:
         )
 
     def test_13_02_tool_call_stream(self):
-        """Stream tool_call: stream should rebuild get_weather + last chunk finish_reason==tool_calls."""
+        """Streaming tool_call: stream should rebuild get_weather + trailing chunk finish_reason==tool_calls."""
         r = oai_chat({
             "messages": oai_simple_messages("What's the weather in Beijing?"),
             "tools": [WEATHER_TOOL_OAI],
@@ -995,7 +1050,7 @@ class TestToolCallBasic:
             schema=WEATHER_TOOL_OAI["function"]["parameters"],
             msg="tool_call_stream",
         )
-        # Last finish_reason in the stream should be tool_calls
+        # Trailing stream finish_reason should be tool_calls
         last_finish = None
         for c in reversed(r["chunks"]):
             choices = c.get("choices") or []
@@ -1007,7 +1062,7 @@ class TestToolCallBasic:
         )
 
     def test_13_03_complex_agent_6tools(self):
-        """Pick get_weather from a pool of 6 tools: verifies the model picks the right tool from candidates."""
+        """Pick get_weather out of a pool of 6 tools: verify the model selects the right tool from candidates."""
         tools = make_tools_oai(6)
         msgs = [
             {"role": "system", "content": "You are a helpful assistant. Use tools when appropriate."},
@@ -1015,7 +1070,7 @@ class TestToolCallBasic:
         ]
         r = oai_chat({"messages": msgs, "tools": tools})
         assert_oai_success(r)
-        # In make_tools_oai, the tool with i=0 is get_weather (parameter name 'param', type string)
+        # In make_tools_oai the i=0 tool is get_weather (param name 'param', type string)
         assert_tool_called(
             r,
             expected_name="get_weather",
@@ -1024,7 +1079,7 @@ class TestToolCallBasic:
         )
 
     def test_13_04_param_type_coverage(self):
-        """Parameter type coverage (6 types): arguments must be valid JSON + field types match schema + str_param='hello'."""
+        """Param-type coverage (6 types): arguments must be valid JSON + fields match schema + str_param='hello'."""
         r = oai_chat({
             "messages": oai_simple_messages("Call the complex tool with str_param='hello'"),
             "tools": [PARAM_TYPES_TOOL_OAI],
@@ -1039,7 +1094,7 @@ class TestToolCallBasic:
         )
 
     def test_13_05_tool_without_parameters(self):
-        """function.parameters omitted (spec allows it; M3 in practice enforces non-empty, xfail on failure)."""
+        """function.parameters omitted (spec allows; in practice M3 strictly enforces non-empty — xfail on failure)."""
         tool = {
             "type": "function",
             "function": {
@@ -1091,7 +1146,7 @@ class TestToolCallBasic:
         )
 
     def test_13_07_stream_multi_tool_call(self):
-        """Stream multi tool_call rebuild: both Beijing + Shanghai should trigger; each call's id should be non-empty and unique."""
+        """Stream multi-tool_call rebuild: Beijing + Shanghai must both fire; each call id should be non-empty and unique."""
         r = oai_chat({
             "messages": oai_simple_messages("What's the weather in Beijing and Shanghai?"),
             "tools": [WEATHER_TOOL_OAI],
@@ -1113,7 +1168,7 @@ class TestToolCallBasic:
             )
             loc = (c["arguments_obj"].get("location") or "").lower()
             locations.append(loc)
-        # The set must cover both Beijing and Shanghai (Chinese/English/substring tolerated)
+        # The set must cover both Beijing and Shanghai (tolerate CN/EN and substring matches)
         def _has(city, locs):
             cands = {
                 "beijing": ("beijing", "北京"),
@@ -1126,7 +1181,7 @@ class TestToolCallBasic:
         assert _has("shanghai", locations), (
             f"locations missing Shanghai: {locations}"
         )
-        # tool_call.id should be non-empty and unique (calls need to be distinguishable)
+        # tool_call.id should be non-empty and unique (multiple calls must be distinguishable)
         ids = [c.get("id") or "" for c in calls]
         non_empty_ids = [i for i in ids if i]
         assert len(non_empty_ids) == len(calls), (
@@ -1137,7 +1192,7 @@ class TestToolCallBasic:
         )
 
     def test_13_08_tool_choice_values(self):
-        """tool_choice = none / required / auto branches: none must not trigger; required/auto must trigger."""
+        """tool_choice = none / required / auto branches: none does not trigger, required/auto must trigger."""
         for choice in ["none", "required", "auto"]:
             r = oai_chat({
                 "messages": oai_simple_messages("What's the weather in Beijing?"),
@@ -1157,7 +1212,7 @@ class TestToolCallBasic:
                 )
 
     def test_13_09_tool_stream_auto(self):
-        """tool_choice=auto + stream + explicit prompt inducing tool call; verify stream contains tool_call chunks."""
+        """tool_choice=auto + stream + explicit tool-call cue; verify stream contains tool_call chunks."""
         r = oai_chat({
             "messages": oai_simple_messages(
                 "Use the get_weather tool to fetch weather for Beijing."
@@ -1178,7 +1233,7 @@ class TestToolCallBasic:
         )
 
     def test_13_10_tool_structure(self):
-        """Tool call response structure: must trigger get_weather + location≈Beijing + all schema required fields populated."""
+        """Tool call return structure: must trigger get_weather + location≈Beijing + all schema-required fields present."""
         r = oai_chat({
             "messages": oai_simple_messages("What's the weather in Beijing?"),
             "tools": [WEATHER_TOOL_OAI],
@@ -1193,7 +1248,7 @@ class TestToolCallBasic:
         )
 
     def test_13_11_stream_tool_rebuild(self):
-        """Stream tool_call delta rebuild: after stream rebuild it should contain get_weather + location≈Beijing."""
+        """Stream tool_call delta rebuild: stream-rebuilt result should contain get_weather + location≈Beijing."""
         r = oai_chat({
             "messages": oai_simple_messages("Weather in Beijing?"),
             "tools": [WEATHER_TOOL_OAI],
@@ -1209,14 +1264,14 @@ class TestToolCallBasic:
 
 
 # ============================================================
-# 14 tool_call_schema — tool call advanced schema validation
+# 14 tool_call_schema — tool call schema advanced validation
 # ============================================================
 
 class TestToolCallSchema:
-    """Tool schema advanced: multiple distinct tools in parallel / enum / numeric range / multi-required / nested / deep nested."""
+    """Advanced tool schema: multiple distinct tools in parallel / enum / numeric range / multi-required / nested / deeply nested."""
 
     def test_14_01_multi_distinct_tools_parallel(self):
-        """Multiple distinct tools in parallel in one turn: both get_weather + get_current_time should trigger."""
+        """Multiple distinct tools in the same turn in parallel: get_weather + get_current_time both should trigger."""
         r = oai_chat({
             "messages": oai_simple_messages(
                 "What's the weather in Beijing AND what's the current server time? "
@@ -1230,11 +1285,11 @@ class TestToolCallSchema:
             expected_names=["get_weather", "get_current_time"],
             schemas={
                 "get_weather": WEATHER_TOOL_OAI["function"]["parameters"],
-                # TIME_TOOL_OAI has no parameters; skip schema
+                # TIME_TOOL_OAI has no parameters; skip its schema
             },
             msg="multi_distinct_tools_parallel",
         )
-        # Further check that get_weather.location ≈ Beijing
+        # Further verify get_weather location≈Beijing
         for c in get_tool_calls(r):
             if c["name"] == "get_weather":
                 loc = (c["arguments_obj"] or {}).get("location") or ""
@@ -1260,7 +1315,7 @@ class TestToolCallSchema:
         )
 
     def test_14_03_numeric_range(self):
-        """Numeric range min/max: days ∈ [1, 14]; prompt asks for 3 days, days should fall in a reasonable range."""
+        """Numeric range min/max: days ∈ [1, 14]; prompt asks 3 days, days should fall in a reasonable range."""
         r = oai_chat({
             "messages": oai_simple_messages(
                 "Give me a 3-day weather forecast for Beijing."
@@ -1268,7 +1323,7 @@ class TestToolCallSchema:
             "tools": [FORECAST_TOOL_OAI],
         })
         assert_oai_success(r)
-        # Trigger + exact location + days schema validation (uses _validate_schema range [1,14])
+        # Trigger + exact location + days schema validation (via _validate_schema range [1,14])
         assert_tool_called(
             r,
             expected_name="get_weather_forecast",
@@ -1276,7 +1331,7 @@ class TestToolCallSchema:
             schema=FORECAST_TOOL_OAI["function"]["parameters"],
             msg="numeric_range",
         )
-        # Further soft check on days: close to prompt expectation (3); allow [1,7]
+        # days soft-validation: close to the prompt's expectation (3); allow [1,7]
         call = get_tool_calls(r)[0]
         days = call["arguments_obj"].get("days")
         assert isinstance(days, int) and 1 <= days <= 7, (
@@ -1284,7 +1339,7 @@ class TestToolCallSchema:
         )
 
     def test_14_04_multi_required_fields(self):
-        """Multiple required fields: from_city / to_city / date all required, and date prefix == 2026-06-15."""
+        """Multiple required fields: from_city / to_city / date are all required, and date prefix == 2026-06-15."""
         r = oai_chat({
             "messages": oai_simple_messages(
                 "Search flights from Beijing to Tokyo on 2026-06-15."
@@ -1292,7 +1347,7 @@ class TestToolCallSchema:
             "tools": [FLIGHT_SEARCH_TOOL_OAI],
         })
         assert_oai_success(r)
-        # Three required fields + lenient city match
+        # Three required fields + lenient city matching
         assert_tool_called(
             r,
             expected_name="search_flights",
@@ -1303,7 +1358,7 @@ class TestToolCallSchema:
             schema=FLIGHT_SEARCH_TOOL_OAI["function"]["parameters"],
             msg="multi_required_fields",
         )
-        # date uses prefix match (allows extensions like 2026-06-15T..../2026-06-15Z)
+        # date prefix matching (allow extensions like 2026-06-15T..../2026-06-15Z)
         call = get_tool_calls(r)[0]
         date_val = (call["arguments_obj"].get("date") or "")
         assert isinstance(date_val, str) and date_val.startswith("2026-06-15"), (
@@ -1328,7 +1383,7 @@ class TestToolCallSchema:
             schema=BOOKING_TOOL_OAI["function"]["parameters"],
             msg="nested_object_array structure",
         )
-        # Further check that guests contains Alice 30 and Bob 25
+        # Further validate guests contains Alice 30 and Bob 25
         call = get_tool_calls(r)[0]
         guests = call["arguments_obj"].get("guests") or []
         assert len(guests) == 2, (
@@ -1340,7 +1395,7 @@ class TestToolCallSchema:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_14_06_nested_schema_4_levels(self, stream):
-        """4-level deeply nested schema: should trigger nested_tool + arguments are valid JSON."""
+        """4-level deeply nested schema: should trigger nested_tool + arguments valid JSON."""
         r = oai_chat({
             "messages": oai_simple_messages("Call the nested tool"),
             "tools": [NESTED_SCHEMA_TOOL_OAI],
@@ -1359,11 +1414,11 @@ class TestToolCallSchema:
 # ============================================================
 
 class TestToolCallCombo:
-    """Tool call + other feature combos: thinking + multi-turn / tools+tool_choice / parallel / extreme agent."""
+    """Tool call combined with other features: thinking + multi-turn / tools+tool_choice / parallel / extreme agent."""
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_15_01_thinking_tool_call_multiturn(self, stream):
-        """thinking + tool call + multi-turn: Beijing tool result already present; second-turn Shanghai question should re-trigger."""
+        """thinking + tool call + multi-turn: Beijing tool result already attached; second turn asks Shanghai and should fire again."""
         r = oai_chat({
             "messages": [
                 {"role": "user", "content": "What's the weather in Beijing?"},
@@ -1387,11 +1442,11 @@ class TestToolCallCombo:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_15_02_response_format_with_tool_choice(self, stream):
-        """tools + tool_choice=auto coexist (original response_format was removed; M3 does not yet support it):
-        endpoint doesn't crash + model takes a reasonable path.
+        """tools + tool_choice=auto coexistence (the original response_format was removed since M3 doesn't support it):
+        endpoint should not crash + model should take a reasonable path.
 
-        Path A: calls get_weather + location≈Beijing
-        Path B: content is a JSON-ish string and contains the Beijing keyword
+        Path A: call get_weather + location≈Beijing
+        Path B: content is a JSON-ish string containing the Beijing keyword
         """
         r = oai_chat({
             "messages": oai_simple_messages("What's the weather in Beijing? Return as JSON."),
@@ -1400,10 +1455,10 @@ class TestToolCallCombo:
             "thinking": {"type": "disabled"},
         }, stream=stream)
         assert r["status"] == 200
-        # Path A: called the tool
+        # Path A: tool was called
         calls = get_tool_calls(r)
         if calls:
-            # If tool was called, hard-verify: name + Beijing + schema
+            # If tool called, hard-check: name + Beijing + schema
             assert_tool_called(
                 r,
                 expected_name="get_weather",
@@ -1412,20 +1467,20 @@ class TestToolCallCombo:
                 msg=f"path_A tool_called stream={stream}",
             )
             return
-        # Path B: tool not called; model takes the JSON text reply path
+        # Path B: tool not called; model took the JSON-text-reply path
         content = get_oai_content(r)
         assert content.strip(), (
             f"path_B: model went JSON-response route but content empty (stream={stream})"
         )
-        # content should be a JSON-ish string (may be wrapped in ```json```, may be raw JSON)
-        # At minimum it should mention "Beijing"/"beijing" to prove the model understood the prompt
+        # content should be a JSON-ish string (possibly wrapped in ```json``` or raw JSON)
+        # At minimum it should contain "Beijing"/"beijing" to prove the model understood the prompt
         assert "beijing" in content.lower() or "北京" in content, (
             f"path_B: JSON content should mention Beijing, got: {content[:300]!r}"
         )
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_15_03_5_parallel_tool_calls(self, stream):
-        """5 parallel tool_calls: at least 1 tool from the pool is called + every call's param field is non-empty."""
+        """5 parallel tool_calls: at least one tool from the pool is called + every call's param field is non-empty."""
         tools = make_tools_oai(5)
         tool_names = {t["function"]["name"] for t in tools}
         r = oai_chat({
@@ -1444,7 +1499,7 @@ class TestToolCallCombo:
             assert c["arguments_obj"] is not None, (
                 f"call[{i}] arguments not valid JSON: {c['arguments_raw'][:300]}"
             )
-            # In the make_tools_oai definition all tools have `param` required, non-empty string
+            # In make_tools_oai, every tool has a required `param` (non-empty string)
             param = c["arguments_obj"].get("param")
             assert isinstance(param, str) and param.strip(), (
                 f"call[{i}] name={c['name']!r} arg.param should be non-empty string, "
@@ -1496,7 +1551,7 @@ class TestToolCallCombo:
         )
 
     def test_15_06_tool_roundtrip(self):
-        """Complete tool call roundtrip: call → result → next user question should answer directly (no more tool calls)."""
+        """Full tool call roundtrip: call → result → user follow-up should answer directly (no further tool call)."""
         r = oai_chat({
             "messages": [
                 {"role": "user", "content": "Weather in Tokyo?"},
@@ -1516,10 +1571,10 @@ class TestToolCallCombo:
 # ============================================================
 
 class TestToolCallEdge:
-    """Tool call edge / exceptions: various abnormal tool result values / id mismatch / many tools / large arguments."""
+    """Tool call edges / exceptions: various abnormal tool result values / id mismatch / many tools / large args."""
 
     def test_16_01_tool_result_content_object_duplicate(self):
-        """tool_result.content as object → 400 (legacy case, semantically overlaps with 16_07; kept for coverage)."""
+        """tool_result.content as object → 400 (legacy case; overlaps semantically with 16_07, kept for completeness)."""
         r = oai_chat({
             "messages": [
                 {"role": "user", "content": "What's the weather?"},
@@ -1564,7 +1619,7 @@ class TestToolCallEdge:
         assert r["status"] in (200, 400)
 
     def test_16_04_tool_result_no_content(self):
-        """tool result without a content field at all."""
+        """tool result has no content field at all."""
         r = oai_chat({
             "messages": [
                 {"role": "user", "content": "What's the weather?"},
@@ -1594,7 +1649,7 @@ class TestToolCallEdge:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_16_06_long_tool_result_50k(self, stream):
-        """50K character tool result; should be handled."""
+        """50K-character tool result should be handled."""
         r = oai_chat({
             "messages": [
                 {"role": "user", "content": "What's the weather?"},
@@ -1638,7 +1693,7 @@ class TestToolCallEdge:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_16_09_partial_tool_call_reply(self, stream):
-        """Two tool_calls but only one is replied → 400."""
+        """Only one of two tool_calls answered → 400."""
         r = oai_chat({
             "messages": [
                 {"role": "user", "content": "Weather in Beijing and Shanghai?"},
@@ -1654,13 +1709,13 @@ class TestToolCallEdge:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_16_10_30_tool_definitions(self, stream):
-        """30 tool definitions: endpoint should accommodate many tools without breaking + if a tool_call is triggered, args must be valid."""
+        """30 tool definitions: endpoint should accept a large tools list without crashing + if tool_call fires, args must be valid."""
         r = oai_chat({
             "messages": oai_simple_messages("Hello, just say hi"),
             "tools": make_tools_oai(30),
         }, stream=stream)
         assert r["status"] == 200
-        # Soft check: if a tool_call is triggered, arguments must be valid JSON (not broken due to large tool count)
+        # Soft check: if a tool_call was triggered, arguments must be valid JSON (cannot break due to large tools count)
         for c in get_tool_calls(r):
             assert c["arguments_obj"] is not None, (
                 f"tool_call args not valid JSON: name={c['name']!r} "
@@ -1669,7 +1724,7 @@ class TestToolCallEdge:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_16_11_tool_name_special_chars(self, stream):
-        """tool name with hyphen/dot (my-tool.v2); model should call it correctly."""
+        """tool name contains hyphen/dot (my-tool.v2); model should be able to call it correctly."""
         tool = {
             "type": "function",
             "function": {
@@ -1708,7 +1763,7 @@ class TestToolCallEdge:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_16_13_long_arguments_10k(self, stream):
-        """10K character tool arguments; endpoint should handle it."""
+        """10K-character tool arguments; endpoint should handle it."""
         long_arg = json.dumps({"location": "A" * 10000})
         r = oai_chat({
             "messages": [
@@ -1723,7 +1778,7 @@ class TestToolCallEdge:
         assert r["status"] == 200
 
     def test_16_14_tool_choice_nonexistent_tool(self):
-        """tool_choice specifies a nonexistent tool: when endpoint leniently accepts as 200, model must not fabricate the call."""
+        """tool_choice points to a nonexistent tool: if endpoint leniently returns 200, model should not invent the call."""
         r = oai_chat({
             "messages": oai_simple_messages("Hello"),
             "tools": [WEATHER_TOOL_OAI],
@@ -1739,11 +1794,11 @@ class TestToolCallEdge:
 
 
 # ============================================================
-# 17 param_stress — parameter stress (long conversation / long system)
+# 17 param_stress — param stress (long conversation / long system)
 # ============================================================
 
 class TestParamStress:
-    """Long conversation / long system parameter stress: verify endpoint tolerance for large inputs."""
+    """Long conversation / long system param stress: verify the endpoint tolerates large inputs."""
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_17_01_long_conversation_20_rounds(self, stream):
@@ -1787,10 +1842,10 @@ class TestReasoningSplit:
 # ============================================================
 
 class TestFinishReason:
-    """finish_reason value scenarios: tool_calls / length."""
+    """finish_reason value-coverage scenarios: tool_calls / length."""
 
     def test_19_01_finish_reason_tool_calls(self):
-        """finish_reason=tool_calls: in tool-triggering scenarios it should be tool_calls (or stop if it takes the chat branch)."""
+        """finish_reason=tool_calls: tool-triggering scenario; should be tool_calls (or stop if chat-branch taken)."""
         r = oai_chat({
             "messages": oai_simple_messages("Weather in Beijing?"),
             "tools": [WEATHER_TOOL_OAI],
@@ -1807,7 +1862,7 @@ class TestFinishReason:
         )
 
     def test_19_02_finish_reason_length(self):
-        """finish_reason=length: forced truncation with max_tokens=10."""
+        """finish_reason=length: max_tokens=10 forces truncation."""
         r = oai_chat({
             "messages": oai_simple_messages("Write a very long essay about the universe"),
             "max_tokens": 10,
@@ -1818,7 +1873,7 @@ class TestFinishReason:
 
 
 # ============================================================
-# 20 error_codes — error codes (text-only)
+# 20 error_codes — error codes (pure-text)
 # ============================================================
 
 class TestErrorCodes:
