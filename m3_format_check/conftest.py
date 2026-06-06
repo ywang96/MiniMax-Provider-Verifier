@@ -37,9 +37,9 @@ API_KEY = os.environ.get("M3_API_KEY")
 MODEL = os.environ.get("M3_MODEL", "MiniMax-M3")
 MODEL_MINI = os.environ.get("M3_MODEL_MINI", "MiniMax-M2-mini")
 
-# Capability switch: some implementations do not pass through the OAI extension
-# field `reasoning_split`. Set M3_SKIP_REASONING_SPLIT=1 to skip cases that
-# depend on this field. Default 0 (do not skip) to preserve existing behavior.
+# 供应商能力开关:某些上游(如 fireworks router)不放行 OAI extension 字段
+# `reasoning_split`,设 M3_SKIP_REASONING_SPLIT=1 时跳过依赖该字段的 case。
+# 默认 0(不跳过)以保持原有行为。
 SKIP_REASONING_SPLIT = os.environ.get("M3_SKIP_REASONING_SPLIT", "").strip() in ("1", "true", "True", "yes")
 
 

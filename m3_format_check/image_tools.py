@@ -1,12 +1,12 @@
 """
-M3 test helpers: any-size single-color PNG byte stream generator + preset video fixture paths
+M3 测试用助手:任意尺寸单色 PNG 字节流生成器 + 预置视频 fixture 路径
 
-Design goals:
-- Zero third-party dependencies (no Pillow), consistent with helpers.py:make_png_1x1 style
-- Single-color PNG generation; IDAT uses zlib compression; a 4000x3000 PNG is only a few KB
-- Video fixtures use preset file paths; fixed-resolution mp4 files live under fixtures/
+设计目标:
+- 零三方依赖(不引入 Pillow),与 helpers.py:make_png_1x1 风格一致
+- 单色 PNG 生成,IDAT 用 zlib 压缩,4000x3000 PNG 实际只有几 KB
+- 视频 fixtures 走预置文件路径,fixtures/ 下放固定分辨率 mp4
 
-helpers.py is left untouched; this file is standalone and imported by test_resolution_tier.py.
+helpers.py 不动,本文件独立,供 test_resolution_tier.py 引用。
 """
 import base64
 import struct
@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Optional
 
 
-# ---------- PNG generator ----------
+# ---------- PNG 生成器 ----------
 
 def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
-    """Generate a single PNG chunk (mirrors the _chunk style in helpers.make_png_1x1)."""
+    """生成单个 PNG chunk(参考 helpers.make_png_1x1 的 _chunk 写法)"""
     payload = chunk_type + data
     crc = struct.pack(">I", zlib.crc32(payload) & 0xFFFFFFFF)
     return struct.pack(">I", len(data)) + payload + crc
@@ -26,13 +26,13 @@ def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
 
 def make_png_bytes(width: int, height: int, r: int = 255, g: int = 0, b: int = 0) -> bytes:
     """
-    Generate a single-color RGB PNG byte stream of width x height pixels.
+    生成 width x height 像素的单色 RGB PNG 字节流。
 
-    Implementation notes:
-    - color type = 2 (RGB, same as make_png_1x1)
+    实现要点:
+    - color type = 2 (RGB,与 make_png_1x1 一致)
     - bit depth = 8
-    - Each row starts with one filter byte (0x00 = None), followed by width RGB triplets
-    - The full raw data goes through zlib.compress; single-color images compress extremely well — a 4000x3000 PNG is roughly 8-12KB
+    - 每行前一个 filter byte (0x00 = None),后跟 width 个 RGB 三元组
+    - 整张 raw 数据走 zlib.compress;单色图压缩比极高,4000x3000 PNG 约 8-12KB
     """
     if width <= 0 or height <= 0:
         raise ValueError(f"invalid dimensions: {width}x{height}")
@@ -50,48 +50,48 @@ def make_png_bytes(width: int, height: int, r: int = 255, g: int = 0, b: int = 0
 
 
 def make_png_base64(width: int, height: int, r: int = 255, g: int = 0, b: int = 0) -> str:
-    """data URL wrapper around make_png_bytes."""
+    """make_png_bytes 的 data URL 包装"""
     return "data:image/png;base64," + base64.b64encode(make_png_bytes(width, height, r, g, b)).decode()
 
 
-# ---------- Video fixtures ----------
+# ---------- 视频 fixtures ----------
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 def fixture_path(name: str) -> Path:
-    """Absolute path of a file under fixtures/."""
+    """fixtures/ 下文件的绝对路径"""
     return FIXTURES_DIR / name
 
 
 def fixture_video_base64(name: str, mime: str = "video/mp4") -> str:
-    """Read a video file under fixtures/ and return base64 in data URL form."""
+    """读取 fixtures/ 下视频文件并返回 data URL 形式的 base64"""
     p = fixture_path(name)
     if not p.exists():
         raise FileNotFoundError(
             f"fixture video not found: {p}\n"
-            f"generate the fixture first (see fixtures/README.md)"
+            f"请先生成 fixture(见 data/m3_api_test/fixtures/README.md)"
         )
     return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode()
 
 
-# A handful of preset fixed-resolution fixtures (see fixtures/README.md for details)
-# Filename → (width, height, purpose description)
+# 预置的几个固定分辨率 fixture(详见 fixtures/README.md)
+# 文件名 → (width, height, 用途说明)
 VIDEO_FIXTURES = {
-    "video_400x300.mp4":   (400, 300,   "low tier — no rescaling"),
-    "video_640x480.mp4":   (640, 480,   "default tier — no rescaling"),
-    "video_1280x720.mp4":  (1280, 720,  "high tier no rescaling / low tier rescaling"),
-    "video_1920x1080.mp4": (1920, 1080, "default tier — rescaling"),
-    "video_3840x2160.mp4": (3840, 2160, "high tier — rescaling"),
+    "video_400x300.mp4":   (400, 300,   "low 档不缩放场景"),
+    "video_640x480.mp4":   (640, 480,   "default 档不缩放场景"),
+    "video_1280x720.mp4":  (1280, 720,  "high 档不缩放/low 档缩放场景"),
+    "video_1920x1080.mp4": (1920, 1080, "default 档缩放场景"),
+    "video_3840x2160.mp4": (3840, 2160, "high 档缩放场景"),
 }
 
 
-# COS backup links (see fixtures/README.md for details); the URL-series cases in test_resolution_tier.py go through this path
+# COS 备份链接(详见 fixtures/README.md);test_resolution_tier.py 的 URL 系列 case 走这条
 COS_VIDEO_BASE = "https://qa-tool-1315599187.cos.ap-shanghai.myqcloud.com/m3-test"
 
 
 def fixture_video_url(name: str) -> str:
-    """Return the COS direct link for a video file under fixtures/ (used when passing video_url.url directly as a URL)."""
+    """返回 fixtures/ 下视频文件对应的 COS 直链(用于 video_url.url 直接传 URL 形式)"""
     if name not in VIDEO_FIXTURES:
         raise KeyError(f"unknown fixture: {name}; known: {list(VIDEO_FIXTURES)}")
     return f"{COS_VIDEO_BASE}/{name}"
