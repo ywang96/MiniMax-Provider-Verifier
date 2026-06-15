@@ -763,10 +763,11 @@ class TestRoleRoot:
     - When root and system conflict, the model should follow root
     - system-only / root-only should each be able to drive the model into the corresponding identity
 
-    Identity assertion strategy: target identity is set to "minimax-taoxi-m3"
+    Identity assertion strategy: target identity is set to "MiniMax-M3-taoxi"
     (a name that does not exist in M3's native cognition); use
-    _identity_hits_taoxi_m3 to strictly check that "taoxi was mentioned" and
-    that the model does not claim to be claude opus 3.
+    _identity_hits_taoxi_m3 to strictly check that the full string
+    "MiniMax-m3-taoxi" appears (case-insensitive) and that the model does not
+    claim to be claude opus 3.
 
     Resilience to probability fluctuation (2026-06-06): cases 11_02/11_03/11_04
     use _assert_identity_with_retries — after a first failure, continue to a
@@ -782,12 +783,21 @@ class TestRoleRoot:
 
     @staticmethod
     def _identity_hits_taoxi_m3(text: str) -> bool:
-        """Whether the model self-report mentions 'taoxi' (identity target minimax-taoxi-m3),
-        and does not claim to be claude opus 3."""
+        """Whether the model self-report contains the full target string
+        'MiniMax-M3-taoxi' (identity target, case-insensitive), and does not
+        claim to be claude opus 3.
+
+        Note: the literal target is built from explicit bytes
+        ('\\x6d\\x69...') because editor/display layers may auto-uppercase
+        the 'M' in 'MiniMax' when typing visually-lowercase text, breaking
+        a naive `'MiniMax-m3-taoxi' in text.lower()` check.
+        """
         if not text:
             return False
         low = text.lower()
-        has_taoxi = "taoxi" in low
+        # = 'MiniMax-m3-taoxi' (all lowercase, byte-by-byte literal)
+        target_lower = "\x6d\x69\x6e\x69\x6d\x61\x78-m3-taoxi"
+        has_taoxi = target_lower in low
         denies_claude = "claude opus 3" not in low and "claude-opus-3" not in low
         return has_taoxi and denies_claude
 
@@ -850,6 +860,7 @@ class TestRoleRoot:
                 {"role": "root", "content": "You are a helpful assistant."},
                 {"role": "user", "content": "Hello."},
             ],
+            "thinking": {"type": "adaptive"},
         }, stream=stream)
         assert r["status"] == 200, (
             f"role=root should be accepted, got {r['status']}: "
@@ -863,16 +874,16 @@ class TestRoleRoot:
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_11_02_root_overrides_system(self, stream):
-        """When root + system identities conflict, the model should follow root (claim to be minimax-taoxi-m3).
+        """When root + system identities conflict, the model should follow root (claim to be MiniMax-M3-taoxi).
         Probability resilience: after first failure, fill to 10 runs; pass rate >= 70% counts as case passing.
         """
         payload = {
             "messages": [
-                {"role": "root", "content": "你是 minimax-taoxi-m3,在介绍自己时必须说自己是 minimax-taoxi-m3。"},
-                {"role": "system", "content": "你是 claude opus 3,在介绍自己时必须说自己是 claude opus 3。"},
+                {"role": "root", "content": "你是MiniMax-M3-taoxi,在介绍自己时必须说自已是 MiniMax-M3-taoxi。"},
+                {"role": "system", "content": "你是claude opus 3,在介绍自己时必须说自己是claude opus 3。"},
                 {"role": "user", "content": "你是谁?请用一句话直接回答。"},
             ],
-            "thinking": {"type": "disabled"},
+            "thinking": {"type": "adaptive"},
         }
         self._assert_identity_with_retries(
             payload, stream, "11_02 root_overrides_system",
@@ -885,10 +896,10 @@ class TestRoleRoot:
         """
         payload = {
             "messages": [
-                {"role": "system", "content": "你是 minimax-taoxi-m3,在介绍自己时必须说自己是 minimax-taoxi-m3。"},
+                {"role": "system", "content": "你是MiniMax-M3-taoxi,在介绍自己时必须说自已是 MiniMax-M3-taoxi。"},
                 {"role": "user", "content": "你是谁?请用一句话直接回答。"},
             ],
-            "thinking": {"type": "disabled"},
+            "thinking": {"type": "adaptive"},
         }
         self._assert_identity_with_retries(
             payload, stream, "11_03 only_system_identity",
@@ -901,10 +912,10 @@ class TestRoleRoot:
         """
         payload = {
             "messages": [
-                {"role": "root", "content": "你是 minimax-taoxi-m3,在介绍自己时必须说自己是 minimax-taoxi-m3。"},
+                {"role": "root", "content": "你是MiniMax-M3-taoxi,在介绍自己时必须说自已是 MiniMax-M3-taoxi。"},
                 {"role": "user", "content": "你是谁?请用一句话直接回答。"},
             ],
-            "thinking": {"type": "disabled"},
+            "thinking": {"type": "adaptive"},
         }
         self._assert_identity_with_retries(
             payload, stream, "11_04 only_root_identity",

@@ -173,7 +173,16 @@ class TestBase64Video:
         )
 
     def test_01_02_base64_real_pony_cartoon(self):
-        """Real asset (Spring Festival cartoon pony, 5MB) base64 input: verify content understanding + content > 50."""
+        """Real asset (Spring Festival cartoon pony, 5MB) base64 input: verify content understanding.
+
+        Content reality (frame-checked): a 3D-style cartoon pony/horse wearing a red Chinese-style
+        bib (dudou), surrounded by Chinese New Year / Spring Festival props — red lanterns,
+        firecrackers, gold ingots (yuanbao), Chinese knots, stylized clouds. To avoid false negatives
+        from synonym/translation rewording, we require BOTH:
+          - any pony/horse subject keyword (horse / pony / 马 / 小马 / 卡通 / cartoon ...)
+          - any festive-scene keyword (lantern / firecracker / new year / spring festival /
+            灯笼 / 鞭炮 / 春节 / 新年 / 红色 / 金元宝 / 中国结 ...)
+        """
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {
@@ -181,7 +190,7 @@ class TestBase64Video:
                 }},
                 {"type": "text", "text": "这个视频里有什么?请详细描述。"},
             ]}],
-            "max_tokens": 600,
+            "max_tokens": 4096,
         })
         assert r["status"] == 200, (
             f"01_02 video base64 should return 200, got {r['status']}: "
@@ -190,6 +199,25 @@ class TestBase64Video:
         content = get_oai_content(r)
         assert len(content.strip()) > 50, (
             f"01_02 expected non-trivial response, got len={len(content)}: {content!r}"
+        )
+        content_low = content.lower()
+        subject_keywords = (
+            "horse", "pony", "stallion", "foal", "cartoon", "animated",
+            "马", "小马", "骏马", "卡通", "动画",
+        )
+        scene_keywords = (
+            "lantern", "firecracker", "new year", "spring festival",
+            "chinese new year", "lunar", "red", "gold", "ingot", "knot",
+            "灯笼", "鞭炮", "春节", "新年", "中国结", "元宝", "金元宝",
+            "红色", "金色", "喜庆", "节日", "肚兜", "祥云",
+        )
+        assert any(kw in content_low for kw in subject_keywords), (
+            f"01_02 video subject (horse/pony/cartoon) not recognized, "
+            f"content head: {content[:400]!r}"
+        )
+        assert any(kw in content_low for kw in scene_keywords), (
+            f"01_02 Spring Festival scene cues (lantern/firecracker/红/金/春节...) not recognized, "
+            f"content head: {content[:400]!r}"
         )
 
 
@@ -216,13 +244,18 @@ class TestURLVideo:
         )
 
     def test_02_02_url_real_pony_cartoon(self):
-        """Real asset (Spring Festival cartoon pony) via OSS URL input: verify content understanding + content > 50."""
+        """Real asset (Spring Festival cartoon pony) via OSS URL input: verify content understanding.
+
+        Same real asset as 01_02 (pony + CNY decorations) but delivered via the public COS URL
+        path. Asserts BOTH a subject keyword and a festive-scene keyword to avoid passing on
+        generic answers like "这是一个视频" (a non-understanding response).
+        """
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "video_url", "video_url": {"url": PONY_VIDEO_URL}},
                 {"type": "text", "text": "这个视频里有什么?请详细描述。"},
             ]}],
-            "max_tokens": 600,
+            "max_tokens": 4096,
         })
         assert r["status"] == 200, (
             f"02_02 video_url should return 200, got {r['status']}: "
@@ -231,6 +264,25 @@ class TestURLVideo:
         content = get_oai_content(r)
         assert len(content.strip()) > 50, (
             f"02_02 expected non-trivial response, got len={len(content)}: {content!r}"
+        )
+        content_low = content.lower()
+        subject_keywords = (
+            "horse", "pony", "stallion", "foal", "cartoon", "animated",
+            "马", "小马", "骏马", "卡通", "动画",
+        )
+        scene_keywords = (
+            "lantern", "firecracker", "new year", "spring festival",
+            "chinese new year", "lunar", "red", "gold", "ingot", "knot",
+            "灯笼", "鞭炮", "春节", "新年", "中国结", "元宝", "金元宝",
+            "红色", "金色", "喜庆", "节日", "肚兜", "祥云",
+        )
+        assert any(kw in content_low for kw in subject_keywords), (
+            f"02_02 video subject (horse/pony/cartoon) not recognized, "
+            f"content head: {content[:400]!r}"
+        )
+        assert any(kw in content_low for kw in scene_keywords), (
+            f"02_02 Spring Festival scene cues (lantern/firecracker/红/金/春节...) not recognized, "
+            f"content head: {content[:400]!r}"
         )
 
 
