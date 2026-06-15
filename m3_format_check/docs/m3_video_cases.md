@@ -31,14 +31,14 @@
 | Case ID | 函数名 | 场景说明 | 主要校验点 |
 |:---:|:---|:---|:---|
 | 01_01 | `test_01_01_base64_video` | base64 最小 MP4 + "What do you see" | HTTP 200 + content 非空(> 20 字符) |
-| 01_02 | `test_01_02_base64_real_pony_cartoon` | 真实素材(春节卡通小马 5MB)base64 输入 | HTTP 200 + content > 50 字符(验内容理解) |
+| 01_02 | `test_01_02_base64_real_pony_cartoon` | 真实素材(春节卡通小马 5MB)base64 输入,`max_tokens=4096` | HTTP 200 + content > 50 字符 + **主体关键词命中**(horse/pony/cartoon/马/小马/卡通/...)+ **春节场景关键词命中**(lantern/firecracker/spring festival/灯笼/鞭炮/春节/元宝/中国结/红色/金色/...) |
 
 ## 02 url_video — URL 视频接受性
 
 | Case ID | 函数名 | 场景说明 | 主要校验点 |
 |:---:|:---|:---|:---|
 | 02_01 | `test_02_01_url_video` | 公网示例 mp4 URL(`SAMPLE_VIDEO_URL`) | HTTP 200 + content 非空(> 20 字符) |
-| 02_02 | `test_02_02_url_real_pony_cartoon` | 真实素材(春节卡通小马)经 OSS URL 输入 | HTTP 200 + content > 50 字符 |
+| 02_02 | `test_02_02_url_real_pony_cartoon` | 真实素材(春节卡通小马)经 OSS URL 输入,`max_tokens=4096` | HTTP 200 + content > 50 字符 + **主体关键词命中**(horse/pony/cartoon/马/小马/卡通/...)+ **春节场景关键词命中**(lantern/firecracker/spring festival/灯笼/鞭炮/春节/元宝/中国结/红色/金色/...) |
 
 ## 03 video_format — 视频容器/MIME 格式
 

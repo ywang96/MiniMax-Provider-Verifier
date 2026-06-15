@@ -137,9 +137,9 @@
 | Case ID | 函数名 | 场景说明 | 主要校验点 |
 |:---:|:---|:---|:---|
 | 11_01 | `test_11_01_role_root_accepted` | 接口接受 role=root | 200 + 非空回答 |
-| 11_02 | `test_11_02_root_overrides_system` | root + system 冲突 | 自称 minimax-taoxi-m3 |
-| 11_03 | `test_11_03_only_system_identity` | 仅 system 写身份 | 自称 minimax-taoxi-m3 |
-| 11_04 | `test_11_04_only_root_identity` | 仅 root 写身份 | 自称 minimax-taoxi-m3 |
+| 11_02 | `test_11_02_root_overrides_system` | root + system 冲突,`thinking=adaptive` | 自称 MiniMax-M3-taoxi(整串严格匹配) |
+| 11_03 | `test_11_03_only_system_identity` | 仅 system 写身份,`thinking=adaptive` | 自称 MiniMax-M3-taoxi(整串严格匹配) |
+| 11_04 | `test_11_04_only_root_identity` | 仅 root 写身份,`thinking=adaptive` | 自称 MiniMax-M3-taoxi(整串严格匹配) |
 
 ## 12 text_semantic — 文本语义遵循
 

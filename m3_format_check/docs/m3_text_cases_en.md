@@ -138,9 +138,9 @@
 | Case ID | Function Name | Scene Description | Key Assertions |
 |:---:|:---|:---|:---|
 | 11_01 | `test_11_01_role_root_accepted` | API accepts role=root | 200 + non-empty response |
-| 11_02 | `test_11_02_root_overrides_system` | root + system conflict | Claims minimax-taoxi-m3 |
-| 11_03 | `test_11_03_only_system_identity` | system-only identity | Claims minimax-taoxi-m3 |
-| 11_04 | `test_11_04_only_root_identity` | root-only identity | Claims minimax-taoxi-m3 |
+| 11_02 | `test_11_02_root_overrides_system` | root + system conflict, `thinking=adaptive` | Claims MiniMax-M3-taoxi (full-string strict match) |
+| 11_03 | `test_11_03_only_system_identity` | system-only identity, `thinking=adaptive` | Claims MiniMax-M3-taoxi (full-string strict match) |
+| 11_04 | `test_11_04_only_root_identity` | root-only identity, `thinking=adaptive` | Claims MiniMax-M3-taoxi (full-string strict match) |
 
 ## 12 text_semantic — Text semantic adherence
 

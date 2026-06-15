@@ -31,14 +31,14 @@
 | Case ID | Function Name | Scene Description | Key Assertions |
 |:---:|:---|:---|:---|
 | 01_01 | `test_01_01_base64_video` | Minimal base64 MP4 + "What do you see" | HTTP 200 + non-empty content (> 20 chars) |
-| 01_02 | `test_01_02_base64_real_pony_cartoon` | Real footage (Spring Festival pony cartoon, 5MB) via base64 | HTTP 200 + content > 50 chars (validates content understanding) |
+| 01_02 | `test_01_02_base64_real_pony_cartoon` | Real footage (Spring Festival pony cartoon, 5MB) via base64, `max_tokens=4096` | HTTP 200 + content > 50 chars + **subject keyword hit** (horse/pony/cartoon/马/小马/卡通/...) + **CNY scene keyword hit** (lantern/firecracker/spring festival/灯笼/鞭炮/春节/元宝/中国结/red/gold/...) |
 
 ## 02 url_video — URL video acceptance
 
 | Case ID | Function Name | Scene Description | Key Assertions |
 |:---:|:---|:---|:---|
 | 02_01 | `test_02_01_url_video` | Public sample mp4 URL (`SAMPLE_VIDEO_URL`) | HTTP 200 + non-empty content (> 20 chars) |
-| 02_02 | `test_02_02_url_real_pony_cartoon` | Real footage (Spring Festival pony cartoon) via OSS URL | HTTP 200 + content > 50 chars |
+| 02_02 | `test_02_02_url_real_pony_cartoon` | Real footage (Spring Festival pony cartoon) via OSS URL, `max_tokens=4096` | HTTP 200 + content > 50 chars + **subject keyword hit** (horse/pony/cartoon/马/小马/卡通/...) + **CNY scene keyword hit** (lantern/firecracker/spring festival/灯笼/鞭炮/春节/元宝/中国结/red/gold/...) |
 
 ## 03 video_format — Video container/MIME format
 
