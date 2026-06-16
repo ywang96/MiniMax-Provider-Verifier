@@ -70,7 +70,7 @@
 | Case ID | 函数名 | 场景说明 | 主要校验点 |
 |:---:|:---|:---|:---|
 | 05_01 | `test_05_01_temperature_values` | temperature 合法值 [0, 0.5, 1, 2] | 各取值均 200 |
-| 05_02 | `test_05_02_top_p` | top_p 边界值 [0, 0.5, 1.0] | 各取值均 200 |
+| 05_02 | `test_05_02_top_p` | top_p 边界值 [0.1, 0.5, 0.95] | 各取值均 200 |
 | 05_03 | `test_05_03_seed_parameter` | seed=42 + temperature=0 | 接口接受用于确定性输出 |
 
 ## 06 max_tokens — max_tokens / max_completion_tokens 边界

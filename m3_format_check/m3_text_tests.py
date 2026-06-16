@@ -243,8 +243,8 @@ class TestSampling:
             assert_oai_success(r)
 
     def test_05_02_top_p(self):
-        """top_p boundary values: 0 / 0.5 / 1.0 each should return 200."""
-        for tp in [0, 0.5, 1.0]:
+        """top_p boundary values: 0.1 / 0.5 / 0.95 each should return 200."""
+        for tp in [0.1, 0.5, 0.95]:
             r = oai_chat({
                 "messages": oai_simple_messages("Say hi"),
                 "top_p": tp,

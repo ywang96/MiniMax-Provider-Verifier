@@ -70,7 +70,7 @@
 | Case ID | Function Name | Scene Description | Key Assertions |
 |:---:|:---|:---|:---|
 | 05_01 | `test_05_01_temperature_values` | Valid temperatures [0, 0.5, 1, 2] | All values return 200 |
-| 05_02 | `test_05_02_top_p` | top_p boundaries [0, 0.5, 1.0] | All values return 200 |
+| 05_02 | `test_05_02_top_p` | top_p boundaries [0.1, 0.5, 0.95] | All values return 200 |
 | 05_03 | `test_05_03_seed_parameter` | seed=42 + temperature=0 | API accepts for deterministic output |
 
 ## 06 max_tokens — max_tokens / max_completion_tokens boundaries
