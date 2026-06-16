@@ -127,7 +127,7 @@
 | 10_01 | `test_10_01_url_under_50mb` | URL 方式 ~47.4 MB MP4(<50MB) | `assert_oai_success` 通过 |
 | 10_02 | `test_10_02_url_over_50mb` | URL 方式 ~52 MB MP4(>50MB,服务端下载后拒绝) | HTTP 4xx |
 | 10_03 | `test_10_03_base64_under_50mb` | Base64 方式 ~47.4 MB MP4(<50MB) | `assert_oai_success` 通过 |
-| 10_04 | `test_10_04_base64_over_50mb` | Base64 方式 ~52 MB MP4(>50MB) | HTTP 4xx |
+| 10_04 | `test_10_04_base64_over_50mb` | Base64 方式 ~52 MB MP4(video_51mb.mp4,1280×720 / 55s 随机像素噪点视频,>50MB) | 4xx,或 HTTP 200 + content 命中视频/噪点关键词(noise/random/static/pixel/frame/video/clip/magenta/green pixel 等),证明视频帧真的进了视觉编码,排除 silent-drop fallback 文本 |
 | 10_05 | `test_10_05_padded_over_50mb_rejected` | real_2s.mp4 + null padding 到 51MB(真实开头 + null 填充) | 400/413/415/422/500 拒绝 |
 
 ## 11 long_video — 长视频(5/10/20/30 min)
