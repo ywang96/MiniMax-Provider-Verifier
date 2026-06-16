@@ -13,7 +13,7 @@ Organized into 13 modules by what they validate:
   09 image_param           — image-related params (image_format / detail value validation / usage math / compat)
   10 resolution_tier       — detail tier + max_long_side_pixel + max_total_pixels + aspect ratio
   11 image_size_limit      — single-image size limit (10MB / 30MB / 65MB request-body limit / size gradient)
-  12 image_count_limit     — multi-image count upper bound (spec 1.3.6 updated: empirically ≤199 images, URL form)
+  12 image_count_limit     — multi-image count upper bound (spec 1.3.6: 200 images per request, URL form)
   13 base64_compat         — base64 edge-case tolerance (linebreaks / no padding / uppercase MIME / extra data URI params)
 
 Naming convention: `test_<2-digit module id>_<2-digit in-module order>_<scenario description>`
@@ -1024,15 +1024,41 @@ class TestImageSizeLimit:
         assert_oai_success(r)
 
     def test_11_04_url_over_10mb(self):
-        """11_04 — URL form ~11.1MB PNG (>10MB cap) → server should download and 4xx reject."""
+        """11_04 — URL form ~11.1MB PNG (>10MB cap).
+
+        Acceptable:
+          - 4xx (M2 legacy contract: >10MB rejected after download), OR
+          - 200 with the model correctly identifying the image as random noise
+            (M3 new contract aligns with the OAI 30MB cap, so 11.1MB is legal;
+            image_11mb.png is a random-pixel PNG, so the assistant content must
+            mention noise/random/static-like terms to prove vision actually ran).
+        """
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": size_fixture_url("image_11mb.png")}},
                 {"type": "text", "text": "What?"},
             ]}],
         })
-        assert 400 <= r["status"] < 500, (
-            f"11_04 expected 4xx (image URL > 10MB should be rejected), got {r['status']}"
+        status = r["status"]
+        if 400 <= status < 500:
+            return
+        assert status == 200, (
+            f"11_04 expected 4xx or 200, got {status}: {str(r.get('body'))[:300]}"
+        )
+        body = r.get("body") or {}
+        choices = body.get("choices") or []
+        content = ""
+        if choices:
+            msg = choices[0].get("message") or {}
+            content = (msg.get("content") or "").lower()
+        noise_terms = ("noise", "random", "static", "noisy", "pixel", "snow",
+                       "interference", "garbage", "scramble", "tv static",
+                       "random pixel", "random color", "no recognizable",
+                       "no discernible", "noisy pattern", "random pattern",
+                       "chaotic", "pure noise", "test pattern")
+        assert any(t in content for t in noise_terms), (
+            f"11_04 status=200 but assistant did not identify the image as noise; "
+            f"content head: {content[:300]}"
         )
 
     def test_11_05_base64_under_10mb(self):
@@ -1141,63 +1167,114 @@ class TestImageSizeLimit:
 
 
 # ============================================================
-# 12 image_count_limit — multi-image count upper bound (spec 1.3.6 updated: empirically ≤199 images)
+# 12 image_count_limit — multi-image count upper bound (spec 1.3.6: ≤200 images per request)
 # ============================================================
 
-# Public COS image direct link (reused from 02_01), use URL form to construct a large batch of image_url,
-# to avoid base64 blowing past the 65MB body limit when stacking 200 images.
-_COUNT_LIMIT_IMAGE_URL = (
-    "https://qa-tool-1315599187.cos.ap-shanghai.myqcloud.com"
-    "/model-release-checker/fixtures/m3_test_images/sx1.jpg"
-)
+# Image source for stacking 200+ images:
+#   Use the synthetic 672x672 PNG generator (image_tools.make_png_base64). 672x672 is the M3
+#   low-tier minimum size, encoding at roughly 600 tokens per image; stacking 200 of them stays
+#   well under the 524k max_model_len decoder cap.
+#   The previously-used COS sx1.jpg (2000x1334, ~3,400 tokens/image) blew past max_model_len
+#   at 200 images and prevented the cap from ever being exercised on the network path.
+
+
+def _count_mentions_in_text(content: str, expected: int) -> bool:
+    """Check whether the assistant's reply mentions seeing `expected` images.
+
+    Match strategy (case-insensitive):
+      1) numeric token `\\b<expected>\\b` appearing alongside image-ish nouns
+         (image/images/photo/photos/picture/pictures/figure/figures/frame/frames),
+         in either order within the same line; OR
+      2) the standalone numeric token within ~40 chars of an image-ish noun.
+
+    Decimal-only matches (e.g. usage breakdowns like "200 tokens") never count
+    because they require an image noun in proximity.
+    """
+    if not content:
+        return False
+    import re
+    text = content.lower()
+    image_noun = r"image|images|photo|photos|picture|pictures|figure|figures|frame|frames"
+    pat_num_then_noun = rf"\b{expected}\b[^\n]{{0,40}}\b(?:{image_noun})\b"
+    pat_noun_then_num = rf"\b(?:{image_noun})\b[^\n]{{0,40}}\b{expected}\b"
+    return bool(re.search(pat_num_then_noun, text) or re.search(pat_noun_then_num, text))
 
 
 class TestImageCountLimit:
-    """spec 1.3.6 "request supports at most 20 images".
-    Empirically, the official M3 (2026-06-06) also rejects 20 images with a bare 400 (2013)
-    (suspected boundary-includes-equals or implicit aggregate check), so at_max takes 19 to
-    verify "acceptance" and over_max takes 20 to verify "out of bounds", same conservative
-    template as the 200-image version. Use the URL form to provide images, consistent with §02_01
-    in the rest of the file, to avoid base64 size interference."""
+    """spec 1.3.6 "request supports at most 200 images" (base64 data URL form).
 
-    def _url_block(self):
-        """Single-image URL-form image_url block for COS sx1.jpg."""
-        return {"type": "image_url", "image_url": {"url": _COUNT_LIMIT_IMAGE_URL}}
+    Per-case acceptance contracts:
+      - 12_01 (200 images, at the spec cap): HTTP 200 AND the model must acknowledge it sees 200 images.
+      - 12_02 (201 images, one over the spec cap): either 4xx rejection, OR HTTP 200 with the model
+        acknowledging it sees 201 images (some providers accept >200 silently and process them all;
+        we only require they don't undercount).
 
+    Images are synthetic 672x672 PNGs whose RGB varies with the index, so every image is distinct
+    (defeats provider-side dedup) and per-image token cost stays low enough to leave headroom
+    against the model's max_model_len."""
+
+    def _url_block(self, idx: int = 0):
+        """Single-image block: 672x672 synthetic PNG, base64 data URL.
+
+        RGB varies with `idx` so every image is distinct and the model can be reasonably
+        expected to count rather than collapse identical inputs."""
+        r, g, b = (idx * 37) % 256, (idx * 53) % 256, (idx * 73) % 256
+        return {"type": "image_url", "image_url": {"url": make_png_base64(672, 672, r, g, b)}}
+
+    @pytest.mark.timeout(600)
     def test_12_01_count_at_max(self):
-        """12_01 — Single request with 19 image URLs (the empirically-acceptable max) → should be accepted HTTP 200.
-
-        Spec nominally caps at 20 images, but the official M3 server also returns 400 (2013) at 20,
-        so at_max uses 19 to verify the "acceptance" boundary, avoiding the server-side 1-image margin.
-        """
-        content = [self._url_block() for _ in range(19)]
-        content.append({"type": "text", "text": "How many images do you see?"})
+        """12_01 — Single request with 200 image URLs (spec 1.3.6 cap) → HTTP 200 AND the model
+        explicitly acknowledges seeing 200 images (rules out silent truncation to a smaller count)."""
+        n = 200
+        content = [self._url_block(i) for i in range(n)]
+        content.append({
+            "type": "text",
+            "text": (
+                f"I just sent you {n} images in this message. "
+                f"Reply with a single sentence stating exactly how many images you see. "
+                f"Example format: 'I see N images.'"
+            ),
+        })
         r = oai_chat({"messages": [{"role": "user", "content": content}]}, timeout=300)
         assert r["status"] == 200, (
-            f"12_01 image count=19 (at max, URL form) HTTP={r['status']}: "
+            f"12_01 image count={n} (at spec max, base64 data URL) HTTP={r['status']}: "
             f"{str(r.get('body'))[:300]}"
         )
+        body_content = get_oai_content(r)
+        assert _count_mentions_in_text(body_content, n), (
+            f"12_01 status=200 but model did not acknowledge seeing {n} images; "
+            f"content head: {body_content[:300]!r}"
+        )
 
+    @pytest.mark.timeout(600)
     def test_12_02_count_over_max(self):
-        """12_02 — Single request with 20 image URLs (out of bounds) → 4xx outright rejection OR 200 + non-empty response.
-        Counter-example: HTTP 200 but content is empty (model produces no text reply).
-        Empirically, official M3 returns 400 `the num of image is larger than the limit: 20`.
+        """12_02 — Single request with 201 image URLs (one over the spec 1.3.6 cap) → either:
+          - 4xx rejection (provider enforces the 200-image cap), OR
+          - HTTP 200 AND the model acknowledges seeing 201 images (provider silently accepts but
+            still processes the full batch — we only require the count is not silently undercounted).
         """
-        content = [self._url_block() for _ in range(20)]
-        content.append({"type": "text", "text": "How many?"})
+        n = 201
+        content = [self._url_block(i) for i in range(n)]
+        content.append({
+            "type": "text",
+            "text": (
+                f"I just sent you {n} images in this message. "
+                f"Reply with a single sentence stating exactly how many images you see. "
+                f"Example format: 'I see N images.'"
+            ),
+        })
         r = oai_chat({"messages": [{"role": "user", "content": content}]}, timeout=300)
         status = r["status"]
         if 400 <= status < 500:
             return
         assert status == 200, (
-            f"12_02 image count=20 (URL form) should be 200 or 4xx, got {status}: "
+            f"12_02 image count={n} (base64 data URL) should be 200 or 4xx, got {status}: "
             f"{str(r.get('body'))[:300]}"
         )
         body_content = get_oai_content(r)
-        assert body_content.strip(), (
-            f"12_02 image count=20 returned 200 but content is empty; "
-            f"server should either reject 4xx or produce a valid response. "
-            f"body: {str(r.get('body'))[:300]}"
+        assert _count_mentions_in_text(body_content, n), (
+            f"12_02 status=200 but model did not acknowledge seeing {n} images; "
+            f"content head: {body_content[:300]!r}"
         )
 
 

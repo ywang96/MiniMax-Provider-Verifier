@@ -130,7 +130,7 @@
 | 11_01 | `test_11_01_oversized_image_12mb[non_stream\|stream]` | 12MB image (exceeds old 10MB cap), soft | HTTP 200 / 400 |
 | 11_02 | `test_11_02_oversized_image_strict` | 12MB real-image base64 (sx1.jpg + zero padding) | HTTP 200 or 4xx both pass (switched to real-image padding to avoid silent drop on solid-color PNGs in some implementations; assertion relaxed from strict 4xx to "200 or 4xx" since both are valid under M3 contract) |
 | 11_03 | `test_11_03_url_under_10mb` | URL path ~9.2MB PNG (< 10MB cap) | HTTP 200 |
-| 11_04 | `test_11_04_url_over_10mb` | URL path ~11.1MB PNG (> 10MB old cap, within M3 30MB cap) | HTTP 200 or 4xx both pass (200 requires non-empty content >=10 chars, proving the model actually processed the image) |
+| 11_04 | `test_11_04_url_over_10mb` | URL path ~11.1MB PNG (image_11mb.png, random-pixel noise PNG, > 10MB old cap, within M3 30MB cap) | 4xx, OR HTTP 200 with content matching noise keywords (noise/random/static/pixel/snow/chaotic/test pattern, etc.), proving vision actually ran rather than a silent fallback |
 | 11_05 | `test_11_05_base64_under_10mb` | Base64 path ~9.2MB PNG (< 10MB cap) | HTTP 200 |
 | 11_06 | `test_11_06_base64_over_10mb` | Base64 path ~11.1MB PNG (> 10MB cap) | HTTP 200 or 4xx both pass (2026-06-04 revision: assertion relaxed from 4xx to "200 or 4xx", aligned with 11_02 / 11_07 / 11_08) |
 | 11_07 | `test_11_07_oversize_31mb_m3_limit` | 31MB real-image base64 (sx1.jpg + zero padding, M3 30MB upper limit) | HTTP 200 or 4xx both pass (switched to real-image padding to avoid silent drop on solid-color PNGs in some implementations; assertion relaxed to "200 or 4xx") |
@@ -139,12 +139,12 @@
 
 ## 12 image_count_limit — Multi-image count upper bound
 
-spec 1.3.6: "Each request supports up to 20 images." Official M3 server also returns 400 at exactly 20 (boundary appears inclusive), so at_max uses 19 to verify "accept" and over_max uses 20 to verify "over cap".
+spec 1.3.6: "Each request supports up to 200 images." at_max uses 200 (spec cap), over_max uses 201 (one over). To avoid sx1.jpg (~3,400 tokens/image) blowing past the decoder's max_model_len=524,288 at 200 images, we switched to `make_png_base64(672, 672)` synthetic PNGs (~600 tokens/image), with RGB varying by idx to defeat provider-side dedup.
 
 | Case ID | Function | Scenario | Assertion |
 |:---:|:---|:---|:---|
-| 12_01 | `test_12_01_count_at_max` | One request with 19 images (max acceptable in practice; spec cap is 20 but server rejects 20 too, so back off by 1) | HTTP 200 |
-| 12_02 | `test_12_02_count_over_max` | One request with 20 images (spec cap, treated as over-cap) | 4xx rejection OR 200 + non-empty response (counter-example is 200 + empty content) |
+| 12_01 | `test_12_01_count_at_max` | One request with **200** 672×672 synthetic PNGs (spec 1.3.6 cap; RGB varies with idx to defeat dedup; base64 data URL; ~600 tokens/image leaves headroom under max_model_len) | HTTP 200 AND content explicitly acknowledges seeing 200 images (rules out silent truncation to a smaller count) |
+| 12_02 | `test_12_02_count_over_max` | One request with **201** 672×672 synthetic PNGs (one over the cap) | 4xx rejection, OR HTTP 200 AND content explicitly acknowledges seeing 201 images (no silent undercount allowed) |
 
 ## 13 base64_compat — Base64 boundary tolerance
 
