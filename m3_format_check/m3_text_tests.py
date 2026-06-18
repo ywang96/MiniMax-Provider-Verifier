@@ -884,6 +884,7 @@ class TestRoleRoot:
                 {"role": "user", "content": "你是谁?请用一句话直接回答。"},
             ],
             "thinking": {"type": "adaptive"},
+            "reasoning_split": True,
         }
         self._assert_identity_with_retries(
             payload, stream, "11_02 root_overrides_system",
