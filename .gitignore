@@ -33,3 +33,6 @@ toolcall_similarity_results.json
 provider.json
 *.key
 .env
+
+# m3_format_check run logs (contain real API responses / trace ids)
+m3_format_check/logs/

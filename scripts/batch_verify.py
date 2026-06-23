@@ -38,10 +38,14 @@ async def run_provider_verification(
         merged_extra_body = provider_config.get("extra_body", {})
         if extra_body:
             merged_extra_body.update(extra_body)
-        
+
         if merged_extra_body:
             logger.info(f"📦 Using extra_body for provider {provider_name}: {merged_extra_body}")
-        
+
+        default_headers = provider_config.get("default_headers") or {}
+        if default_headers:
+            logger.info(f"📦 Using default_headers for provider {provider_name}: {list(default_headers.keys())}")
+
         runner = ValidatorRunner(
             model=provider_config["model"],
             base_url=provider_config["base_url"],
@@ -57,6 +61,7 @@ async def run_provider_verification(
             debug=debug,
             openrouter_provider=openrouter_provider,
             api_format=api_format,
+            default_headers=default_headers,
         )
         
         await runner.validate_file(file_path)
