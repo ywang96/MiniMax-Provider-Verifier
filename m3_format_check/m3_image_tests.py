@@ -546,7 +546,7 @@ class TestImageThinkingCombo:
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": png_base64()}},
-                {"type": "text", "text": "Describe image and tell weather in Beijing"},
+                {"type": "text", "text": "Describe image and tell weather in Beijing. Think step by step."},
             ]}],
             "tools": [WEATHER_TOOL_OAI],
             "thinking": {"type": "adaptive"},
@@ -559,6 +559,7 @@ class TestImageThinkingCombo:
             schema=WEATHER_TOOL_OAI["function"]["parameters"],
             msg="07_04 image+tool+thinking",
         )
+        assert_thinking_present(r, msg="07_04 image+tool+thinking")
 
 
 # ============================================================

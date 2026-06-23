@@ -1535,7 +1535,7 @@ class TestToolCallCombo:
                 {"id": "c2", "type": "function", "function": {"name": "get_weather", "arguments": '{"location":"Shanghai"}'}}
             ]},
             {"role": "tool", "tool_call_id": "c2", "content": "28°C cloudy"},
-            {"role": "user", "content": "Compare them. Think step by step."},
+            {"role": "user", "content": "Compare them. Think step by step before answering."},
         ]
         r = oai_chat({
             "messages": msgs,
