@@ -219,10 +219,11 @@ class TestThinking:
     def test_04_04_thinking_stream(self):
         """thinking.type=adaptive + stream; verify streaming + thinking coexistence."""
         r = oai_chat({
-            "messages": oai_simple_messages("What is 15*17?"),
+            "messages": oai_simple_messages("What is 15*17? Think step by step."),
             "thinking": {"type": "adaptive"},
         }, stream=True)
         assert_oai_stream_success(r)
+        assert_thinking_present(r, msg="thinking_stream adaptive")
 
 
 # ============================================================
@@ -1438,7 +1439,7 @@ class TestToolCallCombo:
                     {"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": '{"location":"Beijing"}'}}
                 ]},
                 {"role": "tool", "tool_call_id": "call_1", "content": "25°C, sunny"},
-                {"role": "user", "content": "And in Shanghai?"},
+                {"role": "user", "content": "And in Shanghai? Think step by step."},
             ],
             "tools": [WEATHER_TOOL_OAI],
             "thinking": {"type": "adaptive"},
@@ -1451,6 +1452,7 @@ class TestToolCallCombo:
             schema=WEATHER_TOOL_OAI["function"]["parameters"],
             msg=f"thinking_tool_call_multiturn stream={stream}",
         )
+        assert_thinking_present(r, msg=f"thinking_tool_call_multiturn stream={stream}")
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_15_02_response_format_with_tool_choice(self, stream):
@@ -1533,7 +1535,7 @@ class TestToolCallCombo:
                 {"id": "c2", "type": "function", "function": {"name": "get_weather", "arguments": '{"location":"Shanghai"}'}}
             ]},
             {"role": "tool", "tool_call_id": "c2", "content": "28°C cloudy"},
-            {"role": "user", "content": "Compare them"},
+            {"role": "user", "content": "Compare them. Think step by step before answering."},
         ]
         r = oai_chat({
             "messages": msgs,
@@ -1541,6 +1543,7 @@ class TestToolCallCombo:
             "thinking": {"type": "adaptive"},
         }, stream=stream)
         assert r["status"] == 200
+        assert_thinking_present(r, msg=f"extreme_agent_thinking_fc stream={stream}")
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_15_05_system_thinking_tools_combo(self, stream):
@@ -1548,7 +1551,7 @@ class TestToolCallCombo:
         r = oai_chat({
             "messages": [
                 {"role": "system", "content": "You are a weather expert."},
-                {"role": "user", "content": "What's the weather in Tokyo?"},
+                {"role": "user", "content": "What's the weather in Tokyo? Think step by step."},
             ],
             "tools": [WEATHER_TOOL_OAI],
             "thinking": {"type": "adaptive"},
@@ -1561,6 +1564,7 @@ class TestToolCallCombo:
             schema=WEATHER_TOOL_OAI["function"]["parameters"],
             msg=f"system_thinking_tools stream={stream}",
         )
+        assert_thinking_present(r, msg=f"system_thinking_tools stream={stream}")
 
     def test_15_06_tool_roundtrip(self):
         """Full tool call roundtrip: call → result → user follow-up should answer directly (no further tool call)."""
