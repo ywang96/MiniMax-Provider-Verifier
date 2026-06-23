@@ -40,6 +40,7 @@ MAX_WORKERS="10"
 STREAM_MODE=""
 DEBUG_MODE=""
 EXTRA_BODY=""
+EXTRA_HEADERS=""
 DIRECT_URL=""
 DIRECT_MODEL=""
 DIRECT_API_KEY=""
@@ -68,6 +69,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --extra-body)
             EXTRA_BODY="$2"
+            shift 2
+            ;;
+        --extra-headers)
+            EXTRA_HEADERS="$2"
+            shift 2
+            ;;
+        --loop)
+            LOOP_COUNT="$2"
             shift 2
             ;;
         --url)
@@ -228,7 +237,20 @@ for LOOP_IDX in $(seq 1 $LOOP_COUNT); do
     
     # Generate provider.json
     TEMP_PROVIDER="$MODULE_OUTPUT_DIR/provider.json"
-    cat > "$TEMP_PROVIDER" << EOF
+    if [ -n "$EXTRA_HEADERS" ]; then
+        cat > "$TEMP_PROVIDER" << EOF
+[
+  {
+    "name": "$MODULE",
+    "model": "$DIRECT_MODEL",
+    "base_url": "$PROCESSED_URL",
+    "api_key": "$DIRECT_API_KEY",
+    "default_headers": $EXTRA_HEADERS
+  }
+]
+EOF
+    else
+        cat > "$TEMP_PROVIDER" << EOF
 [
   {
     "name": "$MODULE",
@@ -238,6 +260,7 @@ for LOOP_IDX in $(seq 1 $LOOP_COUNT); do
   }
 ]
 EOF
+    fi
     
     # Copy test data
     TEMP_JSONL="$MODULE_OUTPUT_DIR/test_data.jsonl"

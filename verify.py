@@ -1,9 +1,11 @@
 import argparse
 import asyncio
+import copy
 import hashlib
 import json
 import os
 import time
+from collections import defaultdict, deque
 from datetime import datetime
 from typing import Optional
 
@@ -56,6 +58,7 @@ class ValidatorRunner:
         debug: bool = False,
         openrouter_provider: Optional[str] = None,
         api_format: str = "openai",
+        default_headers: Optional[dict] = None,
     ):
         self.model = model
         self.base_url = base_url
@@ -72,6 +75,7 @@ class ValidatorRunner:
         self.debug = debug
         self.openrouter_provider = openrouter_provider
         self.api_format = api_format
+        self.default_headers = default_headers or {}
         
         # Validators management
         # If no validators specified, use default ToolCallsValidator
@@ -88,7 +92,10 @@ class ValidatorRunner:
             base_url=self.base_url,
             timeout=self.timeout,
             max_retries=self.max_retries,
+            default_headers=self.default_headers or None,
         )
+        if self.default_headers:
+            logger.info(f"Using default_headers: {list(self.default_headers.keys())}")
 
         logger.info(f"Initialized with {len(self.validators)} validators: {[v.name for v in self.validators]}")
         logger.info(f"Results will be saved to {self.output_file}")
@@ -123,7 +130,7 @@ class ValidatorRunner:
     
     def prepare_request(self, request: dict) -> dict:
         """Process request messages and set model."""
-        req = request.copy()
+        req = copy.deepcopy(request)
         if "messages" in req:
             for message in req["messages"]:
                 if message.get("role") == "_input":
@@ -142,6 +149,63 @@ class ValidatorRunner:
                         message["reasoning_content"] = reasoning_text
                     elif reason_text:
                         message["reasoning_content"] = reason_text
+            # Uniquify tool_call_id when the same id appears more than once.
+            # Some providers (e.g. MagikCloud) dedup tool_calls by id on the
+            # server side and then require N tool messages == N unique ids,
+            # which breaks when the dataset reuses `<tool_name>:0` across turns.
+            #
+            # Dataset convention: ids look like `<tool_name>:<n>` (e.g. Bash:0).
+            # Strategy: per `<tool_name>` prefix, track the next free `n`. When
+            # an id is already seen, reassign it to `<tool_name>:<next>` and
+            # propagate the rewrite to the matching tool message (matched by
+            # FIFO of seen-but-unconsumed assistant call ids per `<tool_name>`).
+            def split_id(tid: str) -> tuple[str, int]:
+                # Returns (name, n). Falls back to ("", 0) for unparseable ids.
+                if not isinstance(tid, str):
+                    return ("", 0)
+                if ":" in tid:
+                    name, _, suffix = tid.rpartition(":")
+                    try:
+                        return (name, int(suffix))
+                    except ValueError:
+                        return (tid, 0)
+                return (tid, 0)
+
+            # Per-name next available counter (max-seen + 1).
+            next_n: dict[str, int] = {}
+            # Per-name list of (orig_id -> new_id) rewrites for assistant side.
+            # tool messages consume from this in FIFO order keyed by orig_id.
+            pending: dict[str, dict[str, deque]] = defaultdict(lambda: defaultdict(deque))
+
+            for message in req["messages"]:
+                role = message.get("role")
+                if role == "assistant" and isinstance(message.get("tool_calls"), list):
+                    for tc in message["tool_calls"]:
+                        orig = tc.get("id")
+                        if orig is None:
+                            continue
+                        name, n = split_id(orig)
+                        free = next_n.get(name, 0)
+                        if n >= free:
+                            # First time we see this exact id; keep it as-is.
+                            next_n[name] = n + 1
+                            new_id = orig
+                        else:
+                            # Conflict: reassign to the next free slot.
+                            new_id = f"{name}:{free}"
+                            next_n[name] = free + 1
+                            tc["id"] = new_id
+                        pending[name][orig].append(new_id)
+                elif role == "tool":
+                    orig = message.get("tool_call_id")
+                    if orig is None:
+                        continue
+                    name, _ = split_id(orig)
+                    queue = pending[name].get(orig)
+                    if queue:
+                        new_id = queue.popleft()
+                        if new_id != orig:
+                            message["tool_call_id"] = new_id
         if self.model:
             req["model"] = self.model
         if self.stream:
@@ -554,6 +618,14 @@ async def main():
         ),
     )
     parser.add_argument(
+        "--extra-headers",
+        type=str,
+        help=(
+            "Extra HTTP headers as JSON string, e.g. "
+            '\'{"X-MM-Text-Provider-Model": "gwy-vessl:MiniMaxAI/MiniMax-M2.7"}\''
+        ),
+    )
+    parser.add_argument(
         "--incremental",
         action="store_true",
         help=(
@@ -572,9 +644,17 @@ async def main():
             logger.error(f"Invalid JSON for --extra-body: {e}")
             return
 
+    default_headers = {}
+    if args.extra_headers:
+        try:
+            default_headers = json.loads(args.extra_headers)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON for --extra-headers: {e}")
+            return
+
     # Use ToolCallsValidator by default, can add more validators here
     validators = [ToolCallsValidator()]
-    
+
     runner = ValidatorRunner(
         model=args.model,
         base_url=args.base_url,
@@ -587,6 +667,7 @@ async def main():
         extra_body=extra_body,
         incremental=args.incremental,
         validators=validators,
+        default_headers=default_headers,
     )
     await runner.validate_file(args.file_path)
 
