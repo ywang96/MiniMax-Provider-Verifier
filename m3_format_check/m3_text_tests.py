@@ -1275,6 +1275,93 @@ class TestToolCallBasic:
             msg="stream_tool_rebuild",
         )
 
+    def test_13_12_tool_name_mismatch_prompt(self):
+        """Format-check: prompt+history demonstrate a tool that is NOT in `tools`.
+
+        Setup:
+          - messages[0] = user asks Beijing weather + MUST call `get_weather`.
+          - messages[1] = assistant tool_call invoking get_weather/Beijing
+            (priming: the model has "already used" this tool name once).
+          - messages[2] = tool result "Beijing: 25°C sunny".
+          - messages[3] = user follow-up "What's the weather in Shanghai?".
+          - `tools` only declares an unrelated `read_file` tool — `get_weather`
+            is NOT registered.
+
+        Expected behavior (format-output level):
+          - The response MUST be a tool_call (finish_reason='tool_calls'),
+            with `name == 'get_weather'` and `arguments.location ≈ Shanghai`,
+            following the established pattern from the conversation history,
+            regardless of whether the name is in the registered tools list.
+
+        Rationale: validates that the model honors the in-context tool-usage
+        pattern over the registered tool inventory — i.e. that provider
+        plumbing does not silently rewrite/drop the tool name to match the
+        registered list. Schema is intentionally omitted because the invoked
+        tool is not in `tools`.
+        """
+        read_file_tool = {
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Read the content of a file",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "File path"},
+                    },
+                    "required": ["path"],
+                },
+            },
+        }
+        messages = [
+            {
+                "role": "user",
+                "content": (
+                    "What's the weather in Beijing? You MUST call the function "
+                    "`get_weather` with location='Beijing' to answer. Do not "
+                    "reply in natural language."
+                ),
+            },
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_priming_1",
+                        "type": "function",
+                        "function": {
+                            "name": "get_weather",
+                            "arguments": '{"location": "Beijing"}',
+                        },
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call_priming_1",
+                "content": "Beijing: 25°C, sunny",
+            },
+            {
+                "role": "user",
+                "content": "What's the weather in Shanghai?",
+            },
+        ]
+        r = oai_chat({
+            "messages": messages,
+            "tools": [read_file_tool],
+        })
+        assert_oai_success(r)
+        assert_tool_called(
+            r,
+            expected_name="get_weather",
+            expected_args_subset={"location": "Shanghai"},
+            msg="tool_name_mismatch_prompt",
+        )
+        assert r["body"]["choices"][0].get("finish_reason") == "tool_calls", (
+            f"finish_reason should be 'tool_calls', got "
+            f"{r['body']['choices'][0].get('finish_reason')!r}"
+        )
+
 
 # ============================================================
 # 14 tool_call_schema — tool call schema advanced validation
@@ -1832,6 +1919,31 @@ class TestParamStress:
             ],
         }, stream=stream)
         assert r["status"] == 200
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize("ctx_tokens", [512000, 524288], ids=["512000", "524288"])
+    @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
+    def test_17_03_long_input_512k(self, stream, ctx_tokens):
+        """Long input context ~512k tokens (M3 advertised 512k context window).
+
+        Validates that providers correctly accept M3's full 512k input context.
+        Strict expectation: HTTP 200 (provider must honor the advertised window).
+        Both common interpretations of "512k" are covered:
+          - 512000 (decimal 512k)
+          - 524288 (binary 512*1024)
+        max_tokens is kept small (16) so total = input + output stays within budget.
+        """
+        r = oai_chat({
+            "messages": [
+                {"role": "system", "content": long_system_text(ctx_tokens)},
+                {"role": "user", "content": "Reply with the single word OK."},
+            ],
+            "max_tokens": 16,
+        }, stream=stream)
+        assert r["status"] == 200, (
+            f"512k input context should be accepted, got status={r['status']} "
+            f"body={str(r.get('body'))[:500]}"
+        )
 
 
 # ============================================================

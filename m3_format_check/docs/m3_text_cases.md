@@ -2,7 +2,7 @@
 
 > 对应文件:`data/m3_api_test/m3_text_tests.py`
 > 命名规范:`test_<模块编号>_<模块内顺序编号>_<场景说明>`
-> 模块数:**20**;case 函数数:**106**;pytest 收集 items 数:**138**
+> 模块数:**20**;case 函数数:**107**;pytest 收集 items 数:**139**
 
 ## 模块总览
 
@@ -20,7 +20,7 @@
 | 10 | usage_field | usage 字段语义/算术/cache | 8 |
 | 11 | role_root | role=root 协议接受与身份遵循 | 4 |
 | 12 | text_semantic | 文本语义遵循 | 6 |
-| 13 | tool_call_basic | 工具调用基础 | 11 |
+| 13 | tool_call_basic | 工具调用基础 | 12 |
 | 14 | tool_call_schema | 工具调用 schema 高级校验 | 6 |
 | 15 | tool_call_combo | 工具调用与其他特性组合 | 6 |
 | 16 | tool_call_edge | 工具调用边界 / 异常处理 | 14 |
@@ -167,6 +167,7 @@
 | 13_09 | `test_13_09_tool_stream_auto` | tool_choice=auto + 流式 | 流中含 tool_call chunk |
 | 13_10 | `test_13_10_tool_structure` | tool_call 返回结构 | get_weather + Beijing + schema required 字段就位 |
 | 13_11 | `test_13_11_stream_tool_rebuild` | 流式 tool_call delta 重建 | rebuild 后含 get_weather + Beijing |
+| 13_12 | `test_13_12_tool_name_mismatch_prompt` | 用 few-shot 引导:上一轮 assistant 已 tool_call get_weather/Beijing 且 tool 已成功回灌,本轮 user 问上海;tools 只给 read_file | 模型应延续 pattern 输出 tool_call 调 get_weather + location≈Shanghai + finish_reason=tool_calls |
 
 ## 14 tool_call_schema — 工具调用 schema 高级校验
 
@@ -254,4 +255,4 @@
 | `mt ∈ {512000, 524288}` | 06_09 |
 | `mt ∈ {524289, 1000000}` | 06_10 |
 
-总 items = 106 函数 - 30 (`stream` parametrize 函数) - 2 (`mt` parametrize 函数) + 30×2 + 2×2 = **138**。
+总 items = 107 函数 - 30 (`stream` parametrize 函数) - 2 (`mt` parametrize 函数) + 30×2 + 2×2 = **139**。
