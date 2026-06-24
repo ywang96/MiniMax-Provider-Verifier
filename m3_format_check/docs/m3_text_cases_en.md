@@ -2,7 +2,7 @@
 
 > Corresponds to: `data/m3_api_test/m3_text_tests.py`
 > Naming convention: `test_<module_id>_<intra_module_seq>_<scene>`
-> Modules: **20**; Test functions: **106**; Pytest collected items: **138**
+> Modules: **20**; Test functions: **107**; Pytest collected items: **139**
 
 ## Module Overview
 
@@ -20,7 +20,7 @@
 | 10 | usage_field | usage field semantics / arithmetic / cache | 8 |
 | 11 | role_root | role=root protocol acceptance & identity adherence | 4 |
 | 12 | text_semantic | Text semantic adherence | 6 |
-| 13 | tool_call_basic | Tool call basics | 11 |
+| 13 | tool_call_basic | Tool call basics | 12 |
 | 14 | tool_call_schema | Tool call advanced schema validation | 6 |
 | 15 | tool_call_combo | Tool call combined with other features | 6 |
 | 16 | tool_call_edge | Tool call boundary / exception handling | 14 |
@@ -168,6 +168,7 @@
 | 13_09 | `test_13_09_tool_stream_auto` | tool_choice=auto + stream | Stream contains tool_call chunks |
 | 13_10 | `test_13_10_tool_structure` | tool_call return structure | get_weather + Beijing + schema required fields present |
 | 13_11 | `test_13_11_stream_tool_rebuild` | Stream tool_call delta rebuild | Rebuilt contains get_weather + Beijing |
+| 13_12 | `test_13_12_tool_name_mismatch_prompt` | Few-shot priming: prior turn assistant already tool_called get_weather/Beijing with a successful tool result; current user asks Shanghai; `tools` only declares `read_file` | Model should follow the pattern and emit tool_call invoking get_weather + location≈Shanghai + finish_reason=tool_calls |
 
 ## 14 tool_call_schema — Tool call advanced schema validation
 
@@ -255,4 +256,4 @@ Functions decorated with `@pytest.mark.parametrize("stream", [False, True], ids=
 | `mt ∈ {512000, 524288}` | 06_09 |
 | `mt ∈ {524289, 1000000}` | 06_10 |
 
-Total items = 106 functions - 30 (`stream` parametrize functions) - 2 (`mt` parametrize functions) + 30×2 + 2×2 = **138**.
+Total items = 107 functions - 30 (`stream` parametrize functions) - 2 (`mt` parametrize functions) + 30×2 + 2×2 = **139**.
