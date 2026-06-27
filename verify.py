@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import time
 from collections import defaultdict, deque
 from datetime import datetime
@@ -644,17 +645,19 @@ async def main():
             logger.error(f"Invalid JSON for --extra-body: {e}")
             return
 
-    # Force-inject max_tokens=40960 — see scripts/batch_verify.py for full rationale.
-    # Short version: defaults around 2048 cause `finish_reason=length` truncation that
-    # silently tanks ToolCalls-Match-Rate; this override keeps every run safe.
-    DEFAULT_MAX_TOKENS = 40960
-    prev_max = extra_body.get("max_tokens")
-    extra_body["max_tokens"] = DEFAULT_MAX_TOKENS
-    if prev_max != DEFAULT_MAX_TOKENS:
-        logger.info(
-            f"🔒 Forced max_tokens={DEFAULT_MAX_TOKENS} "
-            f"(previous={prev_max!r}) to avoid length truncation"
-        )
+    # M3 models need a generous max_tokens — defaults around 2048 cause
+    # `finish_reason=length` truncation that silently tanks ToolCalls-Match-Rate.
+    # See scripts/batch_verify.py for the full rationale and regex justification.
+    M3_MODEL_REGEX = re.compile(r"(?<![A-Za-z0-9])m3(?![A-Za-z0-9])", re.IGNORECASE)
+    M3_DEFAULT_MAX_TOKENS = 40960
+    if M3_MODEL_REGEX.search(args.model or ""):
+        prev_max = extra_body.get("max_tokens")
+        extra_body["max_tokens"] = M3_DEFAULT_MAX_TOKENS
+        if prev_max != M3_DEFAULT_MAX_TOKENS:
+            logger.info(
+                f"🔒 [M3 detected: {args.model}] Forced max_tokens={M3_DEFAULT_MAX_TOKENS} "
+                f"(previous={prev_max!r}) to avoid length truncation"
+            )
 
     default_headers = {}
     if args.extra_headers:

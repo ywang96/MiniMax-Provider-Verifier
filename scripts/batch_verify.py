@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -9,6 +10,37 @@ import megfile
 from loguru import logger
 from verify import ValidatorRunner
 
+
+# Models that need a large output budget. See full rationale below — pass@10 on
+# Together fp4 with the default max_tokens (~2048) silently truncated 49/53
+# failures and dragged ToolCalls-Match-Rate down by ~4.4pp. Re-running with
+# max_tokens=40960 lifted all metrics to passing. Only M3 is known to exhibit
+# this footgun today; add other models here as new evidence arrives.
+M3_MODEL_REGEX = re.compile(r"(?<![A-Za-z0-9])m3(?![A-Za-z0-9])", re.IGNORECASE)
+M3_DEFAULT_MAX_TOKENS = 40960
+
+
+def _maybe_force_m3_max_tokens(model: str, extra_body: dict) -> dict:
+    """If `model` looks like an M3 deployment and the caller didn't already set a
+    large-enough max_tokens, force it to M3_DEFAULT_MAX_TOKENS. Matches the
+    'm3' token bounded by non-alphanumerics so 'gm3'/'pm3'/'rm3' do NOT trigger,
+    but 'MiniMax-M3', 'minimax-m3-0603-fp4', 'MiniMaxAI/MiniMax-M3-NVFP4' all do.
+
+    Returns the (possibly mutated) extra_body. The previous value, if any, is
+    logged so caller intent stays auditable.
+    """
+    if not M3_MODEL_REGEX.search(model or ""):
+        return extra_body
+    if extra_body is None:
+        extra_body = {}
+    prev_max = extra_body.get("max_tokens")
+    extra_body["max_tokens"] = M3_DEFAULT_MAX_TOKENS
+    if prev_max != M3_DEFAULT_MAX_TOKENS:
+        logger.info(
+            f"🔒 [M3 detected: {model}] Forced max_tokens={M3_DEFAULT_MAX_TOKENS} "
+            f"(previous={prev_max!r}) to avoid length truncation"
+        )
+    return extra_body
 
 
 async def run_provider_verification(
@@ -38,6 +70,11 @@ async def run_provider_verification(
         merged_extra_body = provider_config.get("extra_body", {})
         if extra_body:
             merged_extra_body.update(extra_body)
+
+        # M3 deployments need a generous max_tokens — see _maybe_force_m3_max_tokens
+        merged_extra_body = _maybe_force_m3_max_tokens(
+            provider_config.get("model", ""), merged_extra_body
+        )
 
         if merged_extra_body:
             logger.info(f"📦 Using extra_body for provider {provider_name}: {merged_extra_body}")
@@ -295,25 +332,6 @@ async def main():
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON for --extra-body: {e}")
             return
-
-    # Force-inject max_tokens=40960 for all M-series Provider verification runs.
-    # Rationale: pass@10 experiments on Together fp4 (batch_20260627_140452/142300 with
-    # default max_tokens=2048) hit `finish_reason=length` on 49/53 failures, which
-    # silently dragged ToolCalls-Match-Rate down from a true ~98% to 93.6%. Re-running
-    # with max_tokens=40960 (batch_20260627_163400) lifted all 7 metrics to pass.
-    # To prevent this footgun from recurring, override unconditionally so every
-    # provider — even when the caller forgot --extra-body or passed a smaller value —
-    # gets a generous output budget. Adjust here if a future model requires more.
-    DEFAULT_MAX_TOKENS = 40960
-    if extra_body is None:
-        extra_body = {}
-    prev_max = extra_body.get("max_tokens")
-    extra_body["max_tokens"] = DEFAULT_MAX_TOKENS
-    if prev_max != DEFAULT_MAX_TOKENS:
-        logger.info(
-            f"🔒 Forced max_tokens={DEFAULT_MAX_TOKENS} "
-            f"(previous={prev_max!r}) to avoid length truncation"
-        )
     
     await batch_verify_providers(
         provider_file=args.provider_file,
