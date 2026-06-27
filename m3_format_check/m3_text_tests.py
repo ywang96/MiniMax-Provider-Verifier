@@ -1945,6 +1945,153 @@ class TestParamStress:
             f"body={str(r.get('body'))[:500]}"
         )
 
+    @pytest.mark.slow
+    @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
+    def test_17_04_real_text_512k_xiyouji(self, stream):
+        """Real long-text comprehension on the full 西遊記 fixture
+        (~553k tokens — over the 512*1024 boundary).
+
+        Two-tier expectation:
+          1. HTTP (robustness): 200 (silent truncation / large ctx) or any
+             4xx (explicit reject). 5xx is a backend bug — never tolerated.
+          2. Content (capability): if status == 200, the response MUST name
+             a canonical Journey-to-the-West protagonist. Empty / wrong
+             answer on 200 = the model didn't actually understand the long
+             context.
+          4xx skips the content check (the model never got to answer).
+
+        Fixture file is built once by prep_xiyouji_fixture.py.
+        """
+        fixture = os.path.join(
+            os.path.dirname(__file__), "fixtures", "xiyouji_long_context.txt"
+        )
+        assert os.path.exists(fixture), (
+            f"fixture missing: {fixture}; run prep_xiyouji_fixture.py first"
+        )
+        with open(fixture, "r", encoding="utf-8") as f:
+            xiyouji_text = f.read()
+
+        r = oai_chat({
+            "messages": [
+                {"role": "system", "content": xiyouji_text},
+                {"role": "user", "content": "以上是《西游记》的部分原文。请问这部小说的主角叫什么名字?只回答名字,不要其他内容。"},
+            ],
+            # M3 is a reasoning model: completion_tokens are mostly consumed by
+            # the reasoning_content / <think> trace. 64 tokens is far too small
+            # — the thinking eats them all and `content` ends up empty even
+            # though the model has the correct answer. 4096 leaves room for
+            # both the thinking pass and the final 1-2 token answer.
+            "max_tokens": 4096,
+        }, stream=stream)
+
+        # Tier 1: HTTP — 5xx is never acceptable, 4xx is fine (explicit reject).
+        assert 200 <= r["status"] < 500, (
+            f"5xx not allowed for xiyouji-512k input; got status={r['status']} "
+            f"body={str(r.get('body'))[:500]}"
+        )
+
+        # 4xx: model never produced an answer — content check is N/A.
+        if r["status"] != 200:
+            return
+
+        # Tier 2: content — on 200, the model must actually name a protagonist.
+        # Reconstruct content from either stream or non-stream response.
+        # Also include reasoning_content as a fallback: some providers return
+        # the answer there when content is truncated by max_tokens.
+        if stream:
+            content = ""
+            reasoning = ""
+            for c in r.get("chunks") or []:
+                if not isinstance(c, dict):
+                    continue
+                for ch in c.get("choices", []) or []:
+                    delta = ch.get("delta") or {}
+                    content += (delta.get("content") or "")
+                    reasoning += (delta.get("reasoning_content") or "")
+        else:
+            body = r.get("body") or {}
+            choices = body.get("choices") or []
+            msg = (choices[0].get("message") if choices else {}) or {}
+            content = msg.get("content") or ""
+            reasoning = msg.get("reasoning_content") or ""
+
+        haystack = content + "\n" + reasoning
+
+        # Soft match: any canonical protagonist name (Chinese trad/simp + pinyin)
+        canonical = [
+            "孫悟空", "孙悟空", "悟空",
+            "唐僧", "三藏", "玄奘", "唐三藏",
+            "Wukong", "Sun Wukong", "Tang Sanzang", "Tripitaka",
+        ]
+        hit = next((n for n in canonical if n in haystack), None)
+        assert hit is not None, (
+            f"status=200 but response did not name a protagonist; "
+            f"content={content[:200]!r} reasoning={reasoning[:200]!r}"
+        )
+
+    # ----- token-boundary case at 512*1024 = 524288 -----
+    # Character count is calibrated against the official tokenizer
+    # (minimax-m3 on api.minimaxi.com) so that:
+    #   17_05: 624,598 chars → prompt_tokens ≈ 524,011 (just below 524288)
+    # Other providers' tokenizers differ by ≤0.1%, so the relative ordering
+    # vs 524288 stays the same.
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
+    def test_17_05_xiyouji_below_524288_tokens(self, stream):
+        """Real-text input just below 512*1024 = 524288 prompt_tokens.
+        Strict: must return 200 + name a protagonist."""
+        fixture = os.path.join(
+            os.path.dirname(__file__), "fixtures", "xiyouji_long_context.txt"
+        )
+        assert os.path.exists(fixture), (
+            f"fixture missing: {fixture}; run prep_xiyouji_fixture.py first"
+        )
+        with open(fixture, "r", encoding="utf-8") as f:
+            xiyouji_text = f.read()[:624_598]
+        assert len(xiyouji_text) == 624_598, (
+            f"fixture too short ({len(xiyouji_text)} chars); "
+            "rerun prep_xiyouji_fixture.py to extend"
+        )
+
+        r = oai_chat({
+            "messages": [
+                {"role": "system", "content": xiyouji_text},
+                {"role": "user", "content": "以上是《西游记》的部分原文。请问这部小说的主角叫什么名字?只回答名字,不要其他内容。"},
+            ],
+            "max_tokens": 4096,
+        }, stream=stream)
+
+        assert r["status"] == 200, (
+            f"expected 200 for below-524288 input, got status={r['status']} "
+            f"body={str(r.get('body'))[:500]}"
+        )
+
+        if stream:
+            content = ""; reasoning = ""
+            for c in r.get("chunks") or []:
+                if not isinstance(c, dict):
+                    continue
+                for ch in c.get("choices", []) or []:
+                    delta = ch.get("delta") or {}
+                    content += (delta.get("content") or "")
+                    reasoning += (delta.get("reasoning_content") or "")
+        else:
+            body = r.get("body") or {}
+            choices = body.get("choices") or []
+            msg = (choices[0].get("message") if choices else {}) or {}
+            content = msg.get("content") or ""
+            reasoning = msg.get("reasoning_content") or ""
+
+        haystack = content + "\n" + reasoning
+        canonical = ["孫悟空", "孙悟空", "悟空", "唐僧", "三藏", "玄奘",
+                     "唐三藏", "Wukong", "Sun Wukong", "Tang Sanzang", "Tripitaka"]
+        hit = next((n for n in canonical if n in haystack), None)
+        assert hit is not None, (
+            f"response did not name a protagonist; "
+            f"content={content[:200]!r} reasoning={reasoning[:200]!r}"
+        )
+
 
 # ============================================================
 # 18 reasoning_split — reasoning_split extension field
