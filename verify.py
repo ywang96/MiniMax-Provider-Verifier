@@ -644,6 +644,18 @@ async def main():
             logger.error(f"Invalid JSON for --extra-body: {e}")
             return
 
+    # Force-inject max_tokens=40960 — see scripts/batch_verify.py for full rationale.
+    # Short version: defaults around 2048 cause `finish_reason=length` truncation that
+    # silently tanks ToolCalls-Match-Rate; this override keeps every run safe.
+    DEFAULT_MAX_TOKENS = 40960
+    prev_max = extra_body.get("max_tokens")
+    extra_body["max_tokens"] = DEFAULT_MAX_TOKENS
+    if prev_max != DEFAULT_MAX_TOKENS:
+        logger.info(
+            f"🔒 Forced max_tokens={DEFAULT_MAX_TOKENS} "
+            f"(previous={prev_max!r}) to avoid length truncation"
+        )
+
     default_headers = {}
     if args.extra_headers:
         try:

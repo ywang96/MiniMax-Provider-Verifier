@@ -295,6 +295,25 @@ async def main():
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON for --extra-body: {e}")
             return
+
+    # Force-inject max_tokens=40960 for all M-series Provider verification runs.
+    # Rationale: pass@10 experiments on Together fp4 (batch_20260627_140452/142300 with
+    # default max_tokens=2048) hit `finish_reason=length` on 49/53 failures, which
+    # silently dragged ToolCalls-Match-Rate down from a true ~98% to 93.6%. Re-running
+    # with max_tokens=40960 (batch_20260627_163400) lifted all 7 metrics to pass.
+    # To prevent this footgun from recurring, override unconditionally so every
+    # provider — even when the caller forgot --extra-body or passed a smaller value —
+    # gets a generous output budget. Adjust here if a future model requires more.
+    DEFAULT_MAX_TOKENS = 40960
+    if extra_body is None:
+        extra_body = {}
+    prev_max = extra_body.get("max_tokens")
+    extra_body["max_tokens"] = DEFAULT_MAX_TOKENS
+    if prev_max != DEFAULT_MAX_TOKENS:
+        logger.info(
+            f"🔒 Forced max_tokens={DEFAULT_MAX_TOKENS} "
+            f"(previous={prev_max!r}) to avoid length truncation"
+        )
     
     await batch_verify_providers(
         provider_file=args.provider_file,
