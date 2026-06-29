@@ -2,7 +2,7 @@
 
 > Corresponds to: `data/m3_api_test/m3_video_tests.py`
 > Naming convention: `test_<2-digit module id>_<2-digit intra-module seq>_<scene>`
-> Modules: **14**; Test functions: **60**; Pytest collected items: **85**
+> Modules: **15**; Test functions: **61**; Pytest collected items: **86**
 
 ## Module Overview
 
@@ -22,7 +22,8 @@
 | 12 | media_gradient | Resolution gradient / multi-video gradient | 4 | 6 |
 | 13 | video_extension | reasoning_split and other extension fields | 1 | 2 |
 | 14 | error_codes | Video-related error codes | 1 | 1 |
-| | **Total** | | **60** | **85** |
+| 15 | stream_usage | Video + streaming usage chunk | 1 | 1 |
+| | **Total** | | **61** | **86** |
 
 ---
 
@@ -164,9 +165,15 @@
 |:---:|:---|:---|:---|
 | 14_01 | `test_14_01_fps_out_of_range` | fps=100 significantly out-of-range (hard-assert scenario) | HTTP 400 (`assert_error(r, 400)`) |
 
+## 15 stream_usage — Video + streaming usage chunk
+
+| Case ID | Function Name | Scene Description | Key Assertions |
+|:---:|:---|:---|:---|
+| 15_01 | `test_15_01_stream_usage_only_in_last_chunk` | Stream + stream_options.include_usage=true + video | usage non-empty with three positive token fields, present only in the final data chunk |
+
 ---
 
-## Appendix: 85 items after parametrize expansion
+## Appendix: 86 items after parametrize expansion
 
 Functions decorated with `@pytest.mark.parametrize(...)` expand to multiple items. All parametrize factors in the video file:
 
@@ -185,7 +192,7 @@ Functions decorated with `@pytest.mark.parametrize(...)` expand to multiple item
 | `(filename, label) ∈ {1080P, 2K}` | 12_01 | ×2 |
 | `count ∈ {3, 5}` | 12_02 | ×2 |
 
-Total items = 60 functions - 12 (parametrized) + (2+2+2+3+4+5+3+3+3+3+4+2+2) = **85**.
+Total items = 61 functions - 12 (parametrized) + (2+2+2+3+4+5+3+3+3+3+4+2+2) = **86**.
 
 ## Appendix: Fixture index
 

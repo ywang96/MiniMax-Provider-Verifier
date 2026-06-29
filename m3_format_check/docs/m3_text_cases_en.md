@@ -2,14 +2,14 @@
 
 > Corresponds to: `data/m3_api_test/m3_text_tests.py`
 > Naming convention: `test_<module_id>_<intra_module_seq>_<scene>`
-> Modules: **20**; Test functions: **107**; Pytest collected items: **139**
+> Modules: **20**; Test functions: **108**; Pytest collected items: **140**
 
 ## Module Overview
 
 | Module ID | Module Name | Theme | Functions |
 |:---:|:---|:---|:---:|
 | 01 | basic_text | Basic text conversation (non-stream) | 3 |
-| 02 | sse_stream | SSE streaming protocol fields | 5 |
+| 02 | sse_stream | SSE streaming protocol fields | 6 |
 | 03 | multiturn | Multi-turn conversation | 2 |
 | 04 | thinking | thinking toggle | 4 |
 | 05 | sampling | Sampling params (temperature / top_p / seed) | 3 |
@@ -48,6 +48,7 @@
 | 02_03 | `test_02_03_sse_done_marker` | SSE `[DONE]` end marker | xfail if missing (known BUG) |
 | 02_04 | `test_02_04_stream_chunk_fields` | Stream chunk required fields | id / choices / object all present |
 | 02_05 | `test_02_05_text_include_usage` | `stream_options.include_usage=true` (text) | Stream should return usage chunk |
+| 02_06 | `test_02_06_stream_usage_only_in_last_chunk` | `stream_options.include_usage=true` (text) | usage non-empty with three positive token fields, present only in the final data chunk |
 
 ## 03 multiturn — Multi-turn conversation
 
@@ -249,7 +250,7 @@
 
 ---
 
-## Appendix: 138 items after parametrize expansion
+## Appendix: 140 items after parametrize expansion
 
 Functions decorated with `@pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])` expand to 2 items each; the two `max_tokens` parametrized cases each expand to 2 items.
 
@@ -259,4 +260,4 @@ Functions decorated with `@pytest.mark.parametrize("stream", [False, True], ids=
 | `mt ∈ {512000, 524288}` | 06_09 |
 | `mt ∈ {524289, 1000000}` | 06_10 |
 
-Total items = 107 functions - 30 (`stream` parametrize functions) - 2 (`mt` parametrize functions) + 30×2 + 2×2 = **139**.
+Total items = 108 functions - 30 (`stream` parametrize functions) - 2 (`mt` parametrize functions) + 30×2 + 2×2 = **140**.

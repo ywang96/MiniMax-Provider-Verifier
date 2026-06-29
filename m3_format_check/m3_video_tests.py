@@ -19,6 +19,7 @@ Module number / topic:
     12  media_gradient        resolution gradient / multi-video gradient
     13  video_extension       reasoning_split and other extension fields
     14  error_codes           video-related error codes
+    15  stream_usage          video + streaming stream_options.include_usage usage-chunk protocol
 
 Modality priority video > image > text; this file covers video (mixed image+video also lives here).
 
@@ -1232,3 +1233,23 @@ class TestVideoErrorCodes:
             ]}],
         })
         assert_error(r, 400)
+
+
+# ============================================================
+# 15 stream_usage — video + streaming usage chunk protocol
+# ============================================================
+
+class TestVideoStreamUsage:
+    """Video + streaming + stream_options.include_usage usage-chunk protocol fields."""
+
+    def test_15_01_stream_usage_only_in_last_chunk(self):
+        """15_01 — video + stream_options.include_usage=true: usage must be non-empty and only appear in the final stream chunk."""
+        r = oai_chat({
+            "messages": [{"role": "user", "content": [
+                {"type": "video_url", "video_url": {"url": mp4_base64()}},
+                {"type": "text", "text": "Describe this video briefly."},
+            ]}],
+            "stream_options": {"include_usage": True},
+        }, stream=True)
+        assert_oai_stream_success(r)
+        assert_stream_usage_only_in_last_chunk(r, msg="15_01 video include_usage")

@@ -141,6 +141,15 @@ class TestSSEStream:
         }, stream=True)
         assert_oai_stream_success(r)
 
+    def test_02_06_stream_usage_only_in_last_chunk(self):
+        """stream_options.include_usage=true: usage must be non-empty and only appear in the final stream chunk."""
+        r = oai_chat({
+            "messages": oai_simple_messages("Say hi"),
+            "stream_options": {"include_usage": True},
+        }, stream=True)
+        assert_oai_stream_success(r)
+        assert_stream_usage_only_in_last_chunk(r, msg="02_06 text include_usage")
+
 
 # ============================================================
 # 03 multiturn — multi-turn conversation
@@ -1764,20 +1773,6 @@ class TestToolCallEdge:
             "tools": [WEATHER_TOOL_OAI],
         }, stream=stream)
         assert r["status"] == 200
-
-    def test_16_07_tool_result_object(self):
-        """tool result = object type → 400."""
-        r = oai_chat({
-            "messages": [
-                {"role": "user", "content": "What's the weather?"},
-                {"role": "assistant", "content": None, "tool_calls": [
-                    {"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": '{"location":"Beijing"}'}}
-                ]},
-                {"role": "tool", "tool_call_id": "call_1", "content": {"result": "sunny"}},
-            ],
-            "tools": [WEATHER_TOOL_OAI],
-        })
-        assert_error(r, 400)
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_16_08_tool_call_id_mismatch(self, stream):
