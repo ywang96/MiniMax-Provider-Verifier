@@ -844,6 +844,53 @@ def assert_stream_complete(result, msg: str = ""):
     )
 
 
+def assert_stream_usage_only_in_last_chunk(result, msg: str = ""):
+    """When `stream_options.include_usage=true`, assert:
+      1. At least one chunk carries `usage`;
+      2. The `usage` object is non-empty and the three token fields are populated (>0);
+      3. `usage` only appears in the final data chunk (the `[DONE]` marker and any
+         trailing event lines are skipped — the last *content-bearing* SSE chunk
+         is the one that must carry it). No earlier delta chunk may carry usage.
+
+    Spec: OpenAI streaming `include_usage` defines a single terminal chunk that
+    carries the final `usage` object; intermediate delta chunks must not.
+    """
+    chunks = result.get("chunks") or []
+    assert chunks, f"{msg}: stream has no chunks"
+
+    # Filter out non-data sentinels we synthesize in oai_chat: _done / _event / _raw.
+    data_chunks = [
+        c for c in chunks
+        if isinstance(c, dict) and not (c.get("_done") or c.get("_event") or c.get("_raw"))
+    ]
+    assert data_chunks, f"{msg}: stream has no data chunks (only DONE/event markers)"
+
+    usage_indices = [i for i, c in enumerate(data_chunks) if c.get("usage")]
+    assert usage_indices, (
+        f"{msg}: no usage chunk in stream despite stream_options.include_usage=true"
+    )
+
+    # Only the last data chunk may carry usage.
+    last_idx = len(data_chunks) - 1
+    bad = [i for i in usage_indices if i != last_idx]
+    assert not bad, (
+        f"{msg}: usage must appear only in the final stream chunk, "
+        f"but was found at data-chunk indices {bad} (last index = {last_idx}). "
+        f"total data chunks = {len(data_chunks)}"
+    )
+
+    last_usage = data_chunks[last_idx].get("usage")
+    assert isinstance(last_usage, dict) and last_usage, (
+        f"{msg}: final-chunk usage should be a non-empty object, got {last_usage!r}"
+    )
+    for k in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        v = last_usage.get(k)
+        assert isinstance(v, int) and not isinstance(v, bool) and v > 0, (
+            f"{msg}: final-chunk usage.{k} should be a positive int, got {v!r}. "
+            f"usage={last_usage!r}"
+        )
+
+
 def assert_error(result, expected_status):
     assert result["status"] == expected_status, (
         f"Expected {expected_status}, got {result['status']}: {result.get('body', result.get('chunks', ''))}"

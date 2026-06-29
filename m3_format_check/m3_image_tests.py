@@ -601,6 +601,19 @@ class TestImageStreamUsage:
         }, stream=stream)
         assert r["status"] == 200
 
+    def test_08_03_stream_usage_only_in_last_chunk(self):
+        """08_03 — image + stream_options.include_usage=true: usage must be non-empty and only appear in the final stream chunk."""
+        r = oai_chat({
+            "messages": [{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": png_base64()}},
+                {"type": "text", "text": "What color?"},
+            ]}],
+            "stream_options": {"include_usage": True},
+        }, stream=True)
+        assert_oai_stream_success(r)
+        assert_stream_usage_only_in_last_chunk(r, msg="08_03 image include_usage")
+
+
 
 # ============================================================
 # 09 image_param — image-related params / usage / abnormal-input tolerance
