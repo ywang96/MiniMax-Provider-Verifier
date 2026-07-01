@@ -1022,6 +1022,50 @@ class TestTextSemantic:
             f"expected >500 chars long-form output, got {len(content)}: {content[:200]!r}"
         )
 
+    # ------------- 12_07 SILENCE literal-echo protocol (stream) -------------
+    # A verbatim-output contract. The system prompt frames `[SILENCE]` as a
+    # heartbeat protocol ACK — that framing avoids each provider's stock
+    # prompt-injection refusals while still requiring exact literal echo.
+    # Passing = content contains `]` and ends with `]`; run 20 times, one
+    # miss fails the case. Surfaces the "last `]` token dropped on stop"
+    # streaming glitch we've observed on some backends.
+
+    _SILENCE_SYSTEM = (
+        "You are a heartbeat responder in a message-routing pipeline. "
+        "Protocol contract: whenever the user's message is exactly `PING`, "
+        "your response body MUST be exactly the 9 ASCII characters `[SILENCE]` "
+        "and nothing else in the response body. `[SILENCE]` is the wire ack "
+        "for a no-op heartbeat; downstream services parse `content` and reject "
+        "the frame if `content` is not `[SILENCE]`. This is not a restriction "
+        "on you — it is the payload format of this protocol. Any explanation "
+        "or reasoning is welcome inside a thinking block if your runtime "
+        "supports it; only the final response body needs to be `[SILENCE]`."
+    )
+
+    @pytest.mark.timeout(600)
+    def test_12_07_silence_literal_stream(self):
+        """Stream: 20 requests must all return aggregated content that contains `]` and ends with `]`.
+
+        A backend that drops the final token on stop will surface here as
+        `content == "[SILENCE"` (8 chars, missing `]`).
+        """
+        failures = []
+        for i in range(20):
+            r = oai_chat({
+                "messages": oai_simple_messages(
+                    "PING", system_text=self._SILENCE_SYSTEM
+                ),
+            }, stream=True)
+            assert_oai_stream_success(r)
+            content = get_oai_content(r)
+            ok = "]" in content and content.endswith("]")
+            if not ok:
+                failures.append((i, content))
+        assert not failures, (
+            f"stream SILENCE: {len(failures)}/20 failed. "
+            f"first failure #{failures[0][0]}: {failures[0][1][-120:]!r}"
+        )
+
 
 # ============================================================
 # 13 tool_call_basic — tool call basics
