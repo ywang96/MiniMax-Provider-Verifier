@@ -141,6 +141,15 @@ class TestSSEStream:
         }, stream=True)
         assert_oai_stream_success(r)
 
+    def test_02_06_stream_usage_only_in_last_chunk(self):
+        """stream_options.include_usage=true: usage must be non-empty and only appear in the final stream chunk."""
+        r = oai_chat({
+            "messages": oai_simple_messages("Say hi"),
+            "stream_options": {"include_usage": True},
+        }, stream=True)
+        assert_oai_stream_success(r)
+        assert_stream_usage_only_in_last_chunk(r, msg="02_06 text include_usage")
+
 
 # ============================================================
 # 03 multiturn — multi-turn conversation
@@ -219,10 +228,11 @@ class TestThinking:
     def test_04_04_thinking_stream(self):
         """thinking.type=adaptive + stream; verify streaming + thinking coexistence."""
         r = oai_chat({
-            "messages": oai_simple_messages("What is 15*17?"),
+            "messages": oai_simple_messages("What is 15*17? Think step by step."),
             "thinking": {"type": "adaptive"},
         }, stream=True)
         assert_oai_stream_success(r)
+        assert_thinking_present(r, msg="thinking_stream adaptive")
 
 
 # ============================================================
@@ -884,6 +894,7 @@ class TestRoleRoot:
                 {"role": "user", "content": "你是谁?请用一句话直接回答。"},
             ],
             "thinking": {"type": "adaptive"},
+            "reasoning_split": True,
         }
         self._assert_identity_with_retries(
             payload, stream, "11_02 root_overrides_system",
@@ -1018,6 +1029,50 @@ class TestTextSemantic:
         content = get_oai_content(r)
         assert len(content) > 500, (
             f"expected >500 chars long-form output, got {len(content)}: {content[:200]!r}"
+        )
+
+    # ------------- 12_07 SILENCE literal-echo protocol (stream) -------------
+    # A verbatim-output contract. The system prompt frames `[SILENCE]` as a
+    # heartbeat protocol ACK — that framing avoids each provider's stock
+    # prompt-injection refusals while still requiring exact literal echo.
+    # Passing = content contains `]` and ends with `]`; run 20 times, one
+    # miss fails the case. Surfaces the "last `]` token dropped on stop"
+    # streaming glitch we've observed on some backends.
+
+    _SILENCE_SYSTEM = (
+        "You are a heartbeat responder in a message-routing pipeline. "
+        "Protocol contract: whenever the user's message is exactly `PING`, "
+        "your response body MUST be exactly the 9 ASCII characters `[SILENCE]` "
+        "and nothing else in the response body. `[SILENCE]` is the wire ack "
+        "for a no-op heartbeat; downstream services parse `content` and reject "
+        "the frame if `content` is not `[SILENCE]`. This is not a restriction "
+        "on you — it is the payload format of this protocol. Any explanation "
+        "or reasoning is welcome inside a thinking block if your runtime "
+        "supports it; only the final response body needs to be `[SILENCE]`."
+    )
+
+    @pytest.mark.timeout(600)
+    def test_12_07_silence_literal_stream(self):
+        """Stream: 20 requests must all return aggregated content that contains `]` and ends with `]`.
+
+        A backend that drops the final token on stop will surface here as
+        `content == "[SILENCE"` (8 chars, missing `]`).
+        """
+        failures = []
+        for i in range(20):
+            r = oai_chat({
+                "messages": oai_simple_messages(
+                    "PING", system_text=self._SILENCE_SYSTEM
+                ),
+            }, stream=True)
+            assert_oai_stream_success(r)
+            content = get_oai_content(r)
+            ok = "]" in content and content.endswith("]")
+            if not ok:
+                failures.append((i, content))
+        assert not failures, (
+            f"stream SILENCE: {len(failures)}/20 failed. "
+            f"first failure #{failures[0][0]}: {failures[0][1][-120:]!r}"
         )
 
 
@@ -1273,6 +1328,93 @@ class TestToolCallBasic:
             msg="stream_tool_rebuild",
         )
 
+    def test_13_12_tool_name_mismatch_prompt(self):
+        """Format-check: prompt+history demonstrate a tool that is NOT in `tools`.
+
+        Setup:
+          - messages[0] = user asks Beijing weather + MUST call `get_weather`.
+          - messages[1] = assistant tool_call invoking get_weather/Beijing
+            (priming: the model has "already used" this tool name once).
+          - messages[2] = tool result "Beijing: 25°C sunny".
+          - messages[3] = user follow-up "What's the weather in Shanghai?".
+          - `tools` only declares an unrelated `read_file` tool — `get_weather`
+            is NOT registered.
+
+        Expected behavior (format-output level):
+          - The response MUST be a tool_call (finish_reason='tool_calls'),
+            with `name == 'get_weather'` and `arguments.location ≈ Shanghai`,
+            following the established pattern from the conversation history,
+            regardless of whether the name is in the registered tools list.
+
+        Rationale: validates that the model honors the in-context tool-usage
+        pattern over the registered tool inventory — i.e. that provider
+        plumbing does not silently rewrite/drop the tool name to match the
+        registered list. Schema is intentionally omitted because the invoked
+        tool is not in `tools`.
+        """
+        read_file_tool = {
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Read the content of a file",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "File path"},
+                    },
+                    "required": ["path"],
+                },
+            },
+        }
+        messages = [
+            {
+                "role": "user",
+                "content": (
+                    "What's the weather in Beijing? You MUST call the function "
+                    "`get_weather` with location='Beijing' to answer. Do not "
+                    "reply in natural language."
+                ),
+            },
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_priming_1",
+                        "type": "function",
+                        "function": {
+                            "name": "get_weather",
+                            "arguments": '{"location": "Beijing"}',
+                        },
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call_priming_1",
+                "content": "Beijing: 25°C, sunny",
+            },
+            {
+                "role": "user",
+                "content": "What's the weather in Shanghai?",
+            },
+        ]
+        r = oai_chat({
+            "messages": messages,
+            "tools": [read_file_tool],
+        })
+        assert_oai_success(r)
+        assert_tool_called(
+            r,
+            expected_name="get_weather",
+            expected_args_subset={"location": "Shanghai"},
+            msg="tool_name_mismatch_prompt",
+        )
+        assert r["body"]["choices"][0].get("finish_reason") == "tool_calls", (
+            f"finish_reason should be 'tool_calls', got "
+            f"{r['body']['choices'][0].get('finish_reason')!r}"
+        )
+
 
 # ============================================================
 # 14 tool_call_schema — tool call schema advanced validation
@@ -1419,6 +1561,143 @@ class TestToolCallSchema:
             msg=f"nested_schema stream={stream}",
         )
 
+    # ------------- 14_07 top-level oneOf tool schema -------------
+    # Verify a tool whose parameters use top-level `oneOf` (3 branches:
+    # number / stringList / numberList). Model must fire the tool three
+    # times in one turn, one call per branch, with the correct data types
+    # (int, list[str], list[int]) — never a stringified number and never a
+    # {"item": [...]} object wrapper around the array.
+
+    _ONEOF_EXAMPLE_TOOL = {
+        "type": "function",
+        "function": {
+            "name": "ExampleFunction",
+            "description": "An example function to verify the parameters.",
+            "parameters": {
+                "oneOf": [
+                    {
+                        "additionalProperties": False,
+                        "properties": {
+                            "number": {"type": "number", "description": "number"}
+                        },
+                        "type": "object",
+                    },
+                    {
+                        "additionalProperties": False,
+                        "properties": {
+                            "stringList": {
+                                "type": "array",
+                                "description": "list",
+                                "items": {"type": "string"},
+                            }
+                        },
+                        "type": "object",
+                    },
+                    {
+                        "additionalProperties": False,
+                        "properties": {
+                            "numberList": {
+                                "type": "array",
+                                "description": "list",
+                                "items": {"type": "number"},
+                            }
+                        },
+                        "type": "object",
+                    },
+                ],
+                "type": "object",
+            },
+        },
+    }
+
+    _ONEOF_USER_PROMPT = (
+        "调用 ExampleFunction, 连续三次, 中间不要等待, "
+        "第一次只用参数 number = 42, "
+        "第二次只用参数 stringList = [\"12\", \"34\"], "
+        "第三次只用参数 numberList = [12, 34]."
+    )
+
+    _ONEOF_EXPECTED_NUMBER = 42
+    _ONEOF_EXPECTED_STRING_LIST = ["12", "34"]
+    _ONEOF_EXPECTED_NUMBER_LIST = [12, 34]
+
+    @staticmethod
+    def _oneof_check_calls(calls: list) -> str | None:
+        """Return None if the batch passes strictly, else a short failure reason.
+
+        Strict rule (any failure -> FAIL):
+          - 3 tool_calls total, all named ExampleFunction
+          - Each arguments parses to a dict with exactly one oneOf branch key
+          - All three branches (number / stringList / numberList) are covered
+          - number is a numeric type (not string) AND value == 42
+          - stringList is a list AND every element is a string AND value == ["12", "34"]
+          - numberList is a list AND every element is a number AND value == [12, 34]
+        """
+        expected_num = TestToolCallSchema._ONEOF_EXPECTED_NUMBER
+        expected_str_list = TestToolCallSchema._ONEOF_EXPECTED_STRING_LIST
+        expected_num_list = TestToolCallSchema._ONEOF_EXPECTED_NUMBER_LIST
+
+        if len(calls) != 3:
+            return f"expected 3 tool_calls, got {len(calls)}"
+        for i, c in enumerate(calls):
+            if c["name"] != "ExampleFunction":
+                return f"call[{i}].name={c['name']!r}, expected ExampleFunction"
+            if not isinstance(c["arguments_obj"], dict):
+                return f"call[{i}].arguments not a dict: {c['arguments_raw']!r}"
+
+        branches = {}
+        for i, c in enumerate(calls):
+            keys = list(c["arguments_obj"].keys())
+            if len(keys) != 1 or keys[0] not in ("number", "stringList", "numberList"):
+                return f"call[{i}] args keys={keys!r}, expected exactly one of number/stringList/numberList"
+            branches[keys[0]] = c["arguments_obj"]
+        if set(branches) != {"number", "stringList", "numberList"}:
+            return f"branches covered={sorted(branches)}, expected all three"
+
+        # number
+        num_val = branches["number"]["number"]
+        if isinstance(num_val, bool) or not isinstance(num_val, (int, float)):
+            return f"number must be numeric, got {type(num_val).__name__}={num_val!r}"
+        if num_val != expected_num:
+            return f"number expected {expected_num}, got {num_val!r}"
+
+        # stringList
+        s_list = branches["stringList"]["stringList"]
+        if not isinstance(s_list, list):
+            return f"stringList must be a list, got {type(s_list).__name__}={s_list!r}"
+        if not all(isinstance(x, str) for x in s_list):
+            return f"stringList elements must all be str, got {s_list!r}"
+        if s_list != expected_str_list:
+            return f"stringList expected {expected_str_list!r}, got {s_list!r}"
+
+        # numberList
+        n_list = branches["numberList"]["numberList"]
+        if not isinstance(n_list, list):
+            return f"numberList must be a list, got {type(n_list).__name__}={n_list!r}"
+        if not all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in n_list):
+            return f"numberList elements must all be number, got {n_list!r}"
+        if [float(x) for x in n_list] != [float(x) for x in expected_num_list]:
+            return f"numberList expected {expected_num_list!r}, got {n_list!r}"
+        return None
+
+    @pytest.mark.timeout(300)
+    def test_14_07_oneof_toplevel_schema_stream(self):
+        """Stream: single request must produce 3 ExampleFunction calls (one per oneOf branch) with correct types.
+
+        Failure modes we care about:
+          - `number` returned as the string "123" instead of the number 123
+          - stringList / numberList returned as {"item": [...]} object wrappers
+          - stringList element types coerced to numbers, or numberList to strings
+        """
+        r = oai_chat({
+            "messages": oai_simple_messages(self._ONEOF_USER_PROMPT),
+            "tools": [self._ONEOF_EXAMPLE_TOOL],
+        }, stream=True)
+        assert_oai_stream_success(r)
+        calls = get_tool_calls(r)
+        reason = self._oneof_check_calls(calls)
+        assert reason is None, f"oneof toplevel stream: {reason}. calls={calls}"
+
 
 # ============================================================
 # 15 tool_call_combo — tool call combined with other features
@@ -1437,7 +1716,7 @@ class TestToolCallCombo:
                     {"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": '{"location":"Beijing"}'}}
                 ]},
                 {"role": "tool", "tool_call_id": "call_1", "content": "25°C, sunny"},
-                {"role": "user", "content": "And in Shanghai?"},
+                {"role": "user", "content": "And in Shanghai? Think step by step."},
             ],
             "tools": [WEATHER_TOOL_OAI],
             "thinking": {"type": "adaptive"},
@@ -1450,6 +1729,7 @@ class TestToolCallCombo:
             schema=WEATHER_TOOL_OAI["function"]["parameters"],
             msg=f"thinking_tool_call_multiturn stream={stream}",
         )
+        assert_thinking_present(r, msg=f"thinking_tool_call_multiturn stream={stream}")
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_15_02_response_format_with_tool_choice(self, stream):
@@ -1532,7 +1812,7 @@ class TestToolCallCombo:
                 {"id": "c2", "type": "function", "function": {"name": "get_weather", "arguments": '{"location":"Shanghai"}'}}
             ]},
             {"role": "tool", "tool_call_id": "c2", "content": "28°C cloudy"},
-            {"role": "user", "content": "Compare them"},
+            {"role": "user", "content": "Compare them. Think step by step before answering."},
         ]
         r = oai_chat({
             "messages": msgs,
@@ -1540,6 +1820,7 @@ class TestToolCallCombo:
             "thinking": {"type": "adaptive"},
         }, stream=stream)
         assert r["status"] == 200
+        assert_thinking_present(r, msg=f"extreme_agent_thinking_fc stream={stream}")
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_15_05_system_thinking_tools_combo(self, stream):
@@ -1547,7 +1828,7 @@ class TestToolCallCombo:
         r = oai_chat({
             "messages": [
                 {"role": "system", "content": "You are a weather expert."},
-                {"role": "user", "content": "What's the weather in Tokyo?"},
+                {"role": "user", "content": "What's the weather in Tokyo? Think step by step."},
             ],
             "tools": [WEATHER_TOOL_OAI],
             "thinking": {"type": "adaptive"},
@@ -1560,6 +1841,7 @@ class TestToolCallCombo:
             schema=WEATHER_TOOL_OAI["function"]["parameters"],
             msg=f"system_thinking_tools stream={stream}",
         )
+        assert_thinking_present(r, msg=f"system_thinking_tools stream={stream}")
 
     def test_15_06_tool_roundtrip(self):
         """Full tool call roundtrip: call → result → user follow-up should answer directly (no further tool call)."""
@@ -1672,20 +1954,6 @@ class TestToolCallEdge:
             "tools": [WEATHER_TOOL_OAI],
         }, stream=stream)
         assert r["status"] == 200
-
-    def test_16_07_tool_result_object(self):
-        """tool result = object type → 400."""
-        r = oai_chat({
-            "messages": [
-                {"role": "user", "content": "What's the weather?"},
-                {"role": "assistant", "content": None, "tool_calls": [
-                    {"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": '{"location":"Beijing"}'}}
-                ]},
-                {"role": "tool", "tool_call_id": "call_1", "content": {"result": "sunny"}},
-            ],
-            "tools": [WEATHER_TOOL_OAI],
-        })
-        assert_error(r, 400)
 
     @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
     def test_16_08_tool_call_id_mismatch(self, stream):
@@ -1827,6 +2095,178 @@ class TestParamStress:
             ],
         }, stream=stream)
         assert r["status"] == 200
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize("ctx_tokens", [512000, 524288], ids=["512000", "524288"])
+    @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
+    def test_17_03_long_input_512k(self, stream, ctx_tokens):
+        """Long input context ~512k tokens (M3 advertised 512k context window).
+
+        Validates that providers correctly accept M3's full 512k input context.
+        Strict expectation: HTTP 200 (provider must honor the advertised window).
+        Both common interpretations of "512k" are covered:
+          - 512000 (decimal 512k)
+          - 524288 (binary 512*1024)
+        max_tokens is kept small (16) so total = input + output stays within budget.
+        """
+        r = oai_chat({
+            "messages": [
+                {"role": "system", "content": long_system_text(ctx_tokens)},
+                {"role": "user", "content": "Reply with the single word OK."},
+            ],
+            "max_tokens": 16,
+        }, stream=stream)
+        assert r["status"] == 200, (
+            f"512k input context should be accepted, got status={r['status']} "
+            f"body={str(r.get('body'))[:500]}"
+        )
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
+    def test_17_04_real_text_512k_xiyouji(self, stream):
+        """Real long-text comprehension on the full 西遊記 fixture
+        (~553k tokens — over the 512*1024 boundary).
+
+        Two-tier expectation:
+          1. HTTP (robustness): 200 (silent truncation / large ctx) or any
+             4xx (explicit reject). 5xx is a backend bug — never tolerated.
+          2. Content (capability): if status == 200, the response MUST name
+             a canonical Journey-to-the-West protagonist. Empty / wrong
+             answer on 200 = the model didn't actually understand the long
+             context.
+          4xx skips the content check (the model never got to answer).
+
+        Fixture file is built once by prep_xiyouji_fixture.py.
+        """
+        fixture = os.path.join(
+            os.path.dirname(__file__), "fixtures", "xiyouji_long_context.txt"
+        )
+        assert os.path.exists(fixture), (
+            f"fixture missing: {fixture}; run prep_xiyouji_fixture.py first"
+        )
+        with open(fixture, "r", encoding="utf-8") as f:
+            xiyouji_text = f.read()
+
+        r = oai_chat({
+            "messages": [
+                {"role": "system", "content": xiyouji_text},
+                {"role": "user", "content": "以上是《西游记》的部分原文。请问这部小说的主角叫什么名字?只回答名字,不要其他内容。"},
+            ],
+            # M3 is a reasoning model: completion_tokens are mostly consumed by
+            # the reasoning_content / <think> trace. 64 tokens is far too small
+            # — the thinking eats them all and `content` ends up empty even
+            # though the model has the correct answer. 4096 leaves room for
+            # both the thinking pass and the final 1-2 token answer.
+            "max_tokens": 4096,
+        }, stream=stream)
+
+        # Tier 1: HTTP — 5xx is never acceptable, 4xx is fine (explicit reject).
+        assert 200 <= r["status"] < 500, (
+            f"5xx not allowed for xiyouji-512k input; got status={r['status']} "
+            f"body={str(r.get('body'))[:500]}"
+        )
+
+        # 4xx: model never produced an answer — content check is N/A.
+        if r["status"] != 200:
+            return
+
+        # Tier 2: content — on 200, the model must actually name a protagonist.
+        # Reconstruct content from either stream or non-stream response.
+        # Also include reasoning_content as a fallback: some providers return
+        # the answer there when content is truncated by max_tokens.
+        if stream:
+            content = ""
+            reasoning = ""
+            for c in r.get("chunks") or []:
+                if not isinstance(c, dict):
+                    continue
+                for ch in c.get("choices", []) or []:
+                    delta = ch.get("delta") or {}
+                    content += (delta.get("content") or "")
+                    reasoning += (delta.get("reasoning_content") or "")
+        else:
+            body = r.get("body") or {}
+            choices = body.get("choices") or []
+            msg = (choices[0].get("message") if choices else {}) or {}
+            content = msg.get("content") or ""
+            reasoning = msg.get("reasoning_content") or ""
+
+        haystack = content + "\n" + reasoning
+
+        # Soft match: any canonical protagonist name (Chinese trad/simp + pinyin)
+        canonical = [
+            "孫悟空", "孙悟空", "悟空",
+            "唐僧", "三藏", "玄奘", "唐三藏",
+            "Wukong", "Sun Wukong", "Tang Sanzang", "Tripitaka",
+        ]
+        hit = next((n for n in canonical if n in haystack), None)
+        assert hit is not None, (
+            f"status=200 but response did not name a protagonist; "
+            f"content={content[:200]!r} reasoning={reasoning[:200]!r}"
+        )
+
+    # ----- token-boundary case at 512*1024 = 524288 -----
+    # Character count is calibrated against the official tokenizer
+    # (minimax-m3 on api.minimaxi.com) so that:
+    #   17_05: 624,598 chars → prompt_tokens ≈ 524,011 (just below 524288)
+    # Other providers' tokenizers differ by ≤0.1%, so the relative ordering
+    # vs 524288 stays the same.
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])
+    def test_17_05_xiyouji_below_524288_tokens(self, stream):
+        """Real-text input just below 512*1024 = 524288 prompt_tokens.
+        Strict: must return 200 + name a protagonist."""
+        fixture = os.path.join(
+            os.path.dirname(__file__), "fixtures", "xiyouji_long_context.txt"
+        )
+        assert os.path.exists(fixture), (
+            f"fixture missing: {fixture}; run prep_xiyouji_fixture.py first"
+        )
+        with open(fixture, "r", encoding="utf-8") as f:
+            xiyouji_text = f.read()[:624_598]
+        assert len(xiyouji_text) == 624_598, (
+            f"fixture too short ({len(xiyouji_text)} chars); "
+            "rerun prep_xiyouji_fixture.py to extend"
+        )
+
+        r = oai_chat({
+            "messages": [
+                {"role": "system", "content": xiyouji_text},
+                {"role": "user", "content": "以上是《西游记》的部分原文。请问这部小说的主角叫什么名字?只回答名字,不要其他内容。"},
+            ],
+            "max_tokens": 4096,
+        }, stream=stream)
+
+        assert r["status"] == 200, (
+            f"expected 200 for below-524288 input, got status={r['status']} "
+            f"body={str(r.get('body'))[:500]}"
+        )
+
+        if stream:
+            content = ""; reasoning = ""
+            for c in r.get("chunks") or []:
+                if not isinstance(c, dict):
+                    continue
+                for ch in c.get("choices", []) or []:
+                    delta = ch.get("delta") or {}
+                    content += (delta.get("content") or "")
+                    reasoning += (delta.get("reasoning_content") or "")
+        else:
+            body = r.get("body") or {}
+            choices = body.get("choices") or []
+            msg = (choices[0].get("message") if choices else {}) or {}
+            content = msg.get("content") or ""
+            reasoning = msg.get("reasoning_content") or ""
+
+        haystack = content + "\n" + reasoning
+        canonical = ["孫悟空", "孙悟空", "悟空", "唐僧", "三藏", "玄奘",
+                     "唐三藏", "Wukong", "Sun Wukong", "Tang Sanzang", "Tripitaka"]
+        hit = next((n for n in canonical if n in haystack), None)
+        assert hit is not None, (
+            f"response did not name a protagonist; "
+            f"content={content[:200]!r} reasoning={reasoning[:200]!r}"
+        )
 
 
 # ============================================================

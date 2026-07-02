@@ -546,7 +546,7 @@ class TestImageThinkingCombo:
         r = oai_chat({
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": png_base64()}},
-                {"type": "text", "text": "Describe image and tell weather in Beijing"},
+                {"type": "text", "text": "Describe image and tell weather in Beijing. Think step by step."},
             ]}],
             "tools": [WEATHER_TOOL_OAI],
             "thinking": {"type": "adaptive"},
@@ -559,6 +559,7 @@ class TestImageThinkingCombo:
             schema=WEATHER_TOOL_OAI["function"]["parameters"],
             msg="07_04 image+tool+thinking",
         )
+        assert_thinking_present(r, msg="07_04 image+tool+thinking")
 
 
 # ============================================================
@@ -599,6 +600,19 @@ class TestImageStreamUsage:
             ],
         }, stream=stream)
         assert r["status"] == 200
+
+    def test_08_03_stream_usage_only_in_last_chunk(self):
+        """08_03 — image + stream_options.include_usage=true: usage must be non-empty and only appear in the final stream chunk."""
+        r = oai_chat({
+            "messages": [{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": png_base64()}},
+                {"type": "text", "text": "What color?"},
+            ]}],
+            "stream_options": {"include_usage": True},
+        }, stream=True)
+        assert_oai_stream_success(r)
+        assert_stream_usage_only_in_last_chunk(r, msg="08_03 image include_usage")
+
 
 
 # ============================================================

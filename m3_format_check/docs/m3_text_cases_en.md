@@ -2,14 +2,14 @@
 
 > Corresponds to: `data/m3_api_test/m3_text_tests.py`
 > Naming convention: `test_<module_id>_<intra_module_seq>_<scene>`
-> Modules: **20**; Test functions: **106**; Pytest collected items: **138**
+> Modules: **20**; Test functions: **108**; Pytest collected items: **140**
 
 ## Module Overview
 
 | Module ID | Module Name | Theme | Functions |
 |:---:|:---|:---|:---:|
 | 01 | basic_text | Basic text conversation (non-stream) | 3 |
-| 02 | sse_stream | SSE streaming protocol fields | 5 |
+| 02 | sse_stream | SSE streaming protocol fields | 6 |
 | 03 | multiturn | Multi-turn conversation | 2 |
 | 04 | thinking | thinking toggle | 4 |
 | 05 | sampling | Sampling params (temperature / top_p / seed) | 3 |
@@ -20,7 +20,7 @@
 | 10 | usage_field | usage field semantics / arithmetic / cache | 8 |
 | 11 | role_root | role=root protocol acceptance & identity adherence | 4 |
 | 12 | text_semantic | Text semantic adherence | 6 |
-| 13 | tool_call_basic | Tool call basics | 11 |
+| 13 | tool_call_basic | Tool call basics | 12 |
 | 14 | tool_call_schema | Tool call advanced schema validation | 6 |
 | 15 | tool_call_combo | Tool call combined with other features | 6 |
 | 16 | tool_call_edge | Tool call boundary / exception handling | 14 |
@@ -48,6 +48,7 @@
 | 02_03 | `test_02_03_sse_done_marker` | SSE `[DONE]` end marker | xfail if missing (known BUG) |
 | 02_04 | `test_02_04_stream_chunk_fields` | Stream chunk required fields | id / choices / object all present |
 | 02_05 | `test_02_05_text_include_usage` | `stream_options.include_usage=true` (text) | Stream should return usage chunk |
+| 02_06 | `test_02_06_stream_usage_only_in_last_chunk` | `stream_options.include_usage=true` (text) | usage non-empty with three positive token fields, present only in the final data chunk |
 
 ## 03 multiturn — Multi-turn conversation
 
@@ -138,7 +139,7 @@
 | Case ID | Function Name | Scene Description | Key Assertions |
 |:---:|:---|:---|:---|
 | 11_01 | `test_11_01_role_root_accepted` | API accepts role=root | 200 + non-empty response |
-| 11_02 | `test_11_02_root_overrides_system` | root + system conflict, `thinking=adaptive` | Claims MiniMax-M3-taoxi (full-string strict match) |
+| 11_02 | `test_11_02_root_overrides_system` | root + system conflict, `thinking=adaptive` + `reasoning_split` | Claims MiniMax-M3-taoxi (full-string strict match) |
 | 11_03 | `test_11_03_only_system_identity` | system-only identity, `thinking=adaptive` | Claims MiniMax-M3-taoxi (full-string strict match) |
 | 11_04 | `test_11_04_only_root_identity` | root-only identity, `thinking=adaptive` | Claims MiniMax-M3-taoxi (full-string strict match) |
 
@@ -168,6 +169,7 @@
 | 13_09 | `test_13_09_tool_stream_auto` | tool_choice=auto + stream | Stream contains tool_call chunks |
 | 13_10 | `test_13_10_tool_structure` | tool_call return structure | get_weather + Beijing + schema required fields present |
 | 13_11 | `test_13_11_stream_tool_rebuild` | Stream tool_call delta rebuild | Rebuilt contains get_weather + Beijing |
+| 13_12 | `test_13_12_tool_name_mismatch_prompt` | Few-shot priming: prior turn assistant already tool_called get_weather/Beijing with a successful tool result; current user asks Shanghai; `tools` only declares `read_file` | Model should follow the pattern and emit tool_call invoking get_weather + location≈Shanghai + finish_reason=tool_calls |
 
 ## 14 tool_call_schema — Tool call advanced schema validation
 
@@ -216,6 +218,9 @@
 |:---:|:---|:---|:---|
 | 17_01 | `test_17_01_long_conversation_20_rounds` | 20 rounds / 40 messages | HTTP 200 |
 | 17_02 | `test_17_02_long_system_10k` | ~10K tokens long system | HTTP 200 |
+| 17_03 | `test_17_03_long_input_512k` | Synthetic system, ctx_tokens ∈ {512000, 524288} (covers both decimal 512k and binary 512×1024 readings), max_tokens=16 | HTTP 200 (provider must honor advertised 512k window) |
+| 17_04 | `test_17_04_real_text_512k_xiyouji` | Full 西遊記 (~553k tokens, exceeds 512k boundary) as system, ask for protagonist name; max_tokens=4096 | HTTP 200 ≤ status < 500 (no 5xx); **only when 200**, content/reasoning must contain a canonical protagonist name (孙悟空 / 唐僧 / 三藏 / 玄奘 / etc.) |
+| 17_05 | `test_17_05_xiyouji_below_524288_tokens` | First 624,598 chars of 西遊記 (≈ 524,011 tokens, just below 512×1024) as system, ask for protagonist name; max_tokens=4096 | Strict HTTP 200 + canonical protagonist name match |
 
 ## 18 reasoning_split — reasoning_split extension field
 
@@ -245,14 +250,14 @@
 
 ---
 
-## Appendix: 138 items after parametrize expansion
+## Appendix: 140 items after parametrize expansion
 
 Functions decorated with `@pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])` expand to 2 items each; the two `max_tokens` parametrized cases each expand to 2 items.
 
 | Expansion Factor | Cases Involved |
 |:---|:---|
-| `stream ∈ {non_stream, stream}` | 07_01 / 07_02 / 07_03 / 07_04 / 07_05 / 07_06 / 09_03 / 11_01 / 11_02 / 11_03 / 11_04 / 14_06 / 15_01 / 15_02 / 15_03 / 15_04 / 15_05 / 16_02 / 16_03 / 16_05 / 16_06 / 16_08 / 16_09 / 16_10 / 16_11 / 16_12 / 16_13 / 17_01 / 17_02 / 18_01 |
+| `stream ∈ {non_stream, stream}` | 07_01 / 07_02 / 07_03 / 07_04 / 07_05 / 07_06 / 09_03 / 11_01 / 11_02 / 11_03 / 11_04 / 14_06 / 15_01 / 15_02 / 15_03 / 15_04 / 15_05 / 16_02 / 16_03 / 16_05 / 16_06 / 16_08 / 16_09 / 16_10 / 16_11 / 16_12 / 16_13 / 17_01 / 17_02 / 17_03 / 17_04 / 17_05 / 18_01 |
 | `mt ∈ {512000, 524288}` | 06_09 |
 | `mt ∈ {524289, 1000000}` | 06_10 |
 
-Total items = 106 functions - 30 (`stream` parametrize functions) - 2 (`mt` parametrize functions) + 30×2 + 2×2 = **138**.
+Total items = 108 functions - 30 (`stream` parametrize functions) - 2 (`mt` parametrize functions) + 30×2 + 2×2 = **140**.
