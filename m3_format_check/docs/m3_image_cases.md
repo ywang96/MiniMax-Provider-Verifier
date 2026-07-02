@@ -2,7 +2,7 @@
 
 > 对应文件:`data/m3_api_test/m3_image_tests.py`
 > 命名规范:`test_<模块编号 2 位>_<模块内顺序编号 2 位>_<场景说明>`
-> 模块数:**13**;case 函数数:**62**;pytest 收集 items 数:**99**
+> 模块数:**13**;case 函数数:**63**;pytest 收集 items 数:**100**
 
 ## 模块总览
 
@@ -15,13 +15,13 @@
 | 05 | multiturn_multimodal | 多轮多模态对话(图穿插) | 1 | 2 |
 | 06 | image_tool_combo | 图 + tool_call 组合 | 1 | 2 |
 | 07 | image_thinking_combo | 图 + thinking 各形态组合 | 4 | 4 |
-| 08 | image_stream_usage | 图 + 流式 usage chunk | 2 | 3 |
+| 08 | image_stream_usage | 图 + 流式 usage chunk | 3 | 4 |
 | 09 | image_param | 图相关参数 / Usage 算术 / 异常容错 | 5 | 8 |
 | 10 | resolution_tier | 档位 / max_long_side_pixel / max_total_pixels / 宽高比 | 14 | 26 |
 | 11 | image_size_limit | 单图大小限 / 请求体限 / size 梯度 | 9 | 13 |
 | 12 | image_count_limit | 多图数量上限(spec 1.3.6: ≤20 张) | 2 | 2 |
 | 13 | base64_compat | Base64 边界容错 | 4 | 4 |
-| | **合计** | | **62** | **99** |
+| | **合计** | | **63** | **100** |
 
 ---
 
@@ -89,6 +89,7 @@
 |:---:|:---|:---|:---|
 | 08_01 | `test_08_01_stream_include_usage` | 流式 + stream_options.include_usage=true + 图 | HTTP 200 |
 | 08_02 | `test_08_02_multiturn_two_images[non_stream\|stream]` | 第一轮红图 + 第二轮蓝图 follow-up | HTTP 200 |
+| 08_03 | `test_08_03_stream_usage_only_in_last_chunk` | 流式 + stream_options.include_usage=true + 图 | usage 非空且三字段 > 0,且只出现在流式最后一个 data chunk |
 
 ## 09 image_param — 图相关参数 / Usage 算术 / 异常容错
 
@@ -130,7 +131,7 @@
 | 11_01 | `test_11_01_oversized_image_12mb[non_stream\|stream]` | 12MB image(超旧 10MB 上限)宽松 | HTTP 200 / 400 |
 | 11_02 | `test_11_02_oversized_image_strict` | 12MB 真图 base64(sx1.jpg + zero padding) | HTTP 200 或 4xx 均可(fixture 改用真图 padding 避免部分实现对纯色 PNG 的 silent drop;断言由 400 放宽为 200/4xx,M3 契约下两种行为都合法)|
 | 11_03 | `test_11_03_url_under_10mb` | URL 方式 ~9.2MB PNG(<10MB 上限) | HTTP 200 |
-| 11_04 | `test_11_04_url_over_10mb` | URL 方式 ~11.1MB PNG(>10MB 上限) | HTTP 4xx |
+| 11_04 | `test_11_04_url_over_10mb` | URL 方式 ~11.1MB PNG(image_11mb.png,随机像素噪点图,>10MB 旧上限,M3 30MB 上限内) | 4xx,或 HTTP 200 + content 命中噪点关键词(noise/random/static/pixel/snow/chaotic/test pattern 等),证明视觉真的跑了而不是静默 fallback |
 | 11_05 | `test_11_05_base64_under_10mb` | Base64 方式 ~9.2MB PNG(<10MB 上限) | HTTP 200 |
 | 11_06 | `test_11_06_base64_over_10mb` | Base64 方式 ~11.1MB PNG(>10MB 上限) | HTTP 200 或 4xx 均可(2026-06-04 修订:断言由 4xx 放宽为 200/4xx,与 11_02 / 11_07 / 11_08 对齐) |
 | 11_07 | `test_11_07_oversize_31mb_m3_limit` | 31MB 真图 base64(sx1.jpg + zero padding,M3 30MB 上限) | HTTP 200 或 4xx 均可(fixture 改用真图 padding 避免部分实现对纯色 PNG 的 silent drop;断言放宽为 200/4xx) |
@@ -139,12 +140,12 @@
 
 ## 12 image_count_limit — 多图数量上限
 
-spec 1.3.6:"请求最多支持 20 张图片"。边界两侧 (=N 通过 / =N+1 拒绝) 都覆盖。
+spec 1.3.6:"每条请求最多支持 200 张图片"。at_max 取 200(spec 上限),over_max 取 201(越界一张)。为避免 sx1.jpg(~3,400 tokens/图)在 200 张时撞 max_model_len=524,288 的 decoder cap,改用 `make_png_base64(672, 672)` 合成 PNG(~600 tokens/图),RGB 按 idx 变化以避免 provider dedup。
 
 | Case ID | 函数名 | 场景说明 | 主要校验点 |
 |:---:|:---|:---|:---|
-| 12_01 | `test_12_01_count_at_max` | 一条请求带 20 张图片(上限) | HTTP 200 |
-| 12_02 | `test_12_02_count_over_max` | 一条请求带 21 张图片(越界) | 4xx 拒绝 OR 200 + 非空响应(反例为 200 + 空 content) |
+| 12_01 | `test_12_01_count_at_max` | 一条请求带 **200 张** 672×672 合成 PNG(spec 1.3.6 上限,RGB 按 idx 变化避免 dedup,base64 data URL,单图 ~600 tokens 留出 max_model_len 余量) | HTTP 200 AND content 明确声明"看到 200 张图片"(否则视为静默截断到更小张数) |
+| 12_02 | `test_12_02_count_over_max` | 一条请求带 **201 张** 672×672 合成 PNG(越上限 1 张) | 4xx 拒绝,或 HTTP 200 AND content 明确声明"看到 201 张图片"(不允许静默少计) |
 
 ## 13 base64_compat — Base64 边界容错
 

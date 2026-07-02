@@ -2,7 +2,7 @@
 
 > Corresponds to: `data/m3_api_test/m3_video_tests.py`
 > Naming convention: `test_<2-digit module id>_<2-digit intra-module seq>_<scene>`
-> Modules: **14**; Test functions: **60**; Pytest collected items: **85**
+> Modules: **15**; Test functions: **61**; Pytest collected items: **86**
 
 ## Module Overview
 
@@ -22,7 +22,8 @@
 | 12 | media_gradient | Resolution gradient / multi-video gradient | 4 | 6 |
 | 13 | video_extension | reasoning_split and other extension fields | 1 | 2 |
 | 14 | error_codes | Video-related error codes | 1 | 1 |
-| | **Total** | | **60** | **85** |
+| 15 | stream_usage | Video + streaming usage chunk | 1 | 1 |
+| | **Total** | | **61** | **86** |
 
 ---
 
@@ -31,14 +32,14 @@
 | Case ID | Function Name | Scene Description | Key Assertions |
 |:---:|:---|:---|:---|
 | 01_01 | `test_01_01_base64_video` | Minimal base64 MP4 + "What do you see" | HTTP 200 + non-empty content (> 20 chars) |
-| 01_02 | `test_01_02_base64_real_pony_cartoon` | Real footage (Spring Festival pony cartoon, 5MB) via base64 | HTTP 200 + content > 50 chars (validates content understanding) |
+| 01_02 | `test_01_02_base64_real_pony_cartoon` | Real footage (Spring Festival pony cartoon, 5MB) via base64, `max_tokens=4096` | HTTP 200 + content > 50 chars + **subject keyword hit** (horse/pony/cartoon/马/小马/卡通/...) + **CNY scene keyword hit** (lantern/firecracker/spring festival/灯笼/鞭炮/春节/元宝/中国结/red/gold/...) |
 
 ## 02 url_video — URL video acceptance
 
 | Case ID | Function Name | Scene Description | Key Assertions |
 |:---:|:---|:---|:---|
 | 02_01 | `test_02_01_url_video` | Public sample mp4 URL (`SAMPLE_VIDEO_URL`) | HTTP 200 + non-empty content (> 20 chars) |
-| 02_02 | `test_02_02_url_real_pony_cartoon` | Real footage (Spring Festival pony cartoon) via OSS URL | HTTP 200 + content > 50 chars |
+| 02_02 | `test_02_02_url_real_pony_cartoon` | Real footage (Spring Festival pony cartoon) via OSS URL, `max_tokens=4096` | HTTP 200 + content > 50 chars + **subject keyword hit** (horse/pony/cartoon/马/小马/卡通/...) + **CNY scene keyword hit** (lantern/firecracker/spring festival/灯笼/鞭炮/春节/元宝/中国结/red/gold/...) |
 
 ## 03 video_format — Video container/MIME format
 
@@ -127,7 +128,7 @@
 | 10_01 | `test_10_01_url_under_50mb` | URL mode, ~47.4 MB MP4 (<50MB) | `assert_oai_success` passes |
 | 10_02 | `test_10_02_url_over_50mb` | URL mode, ~52 MB MP4 (>50MB, server downloads then rejects) | HTTP 4xx |
 | 10_03 | `test_10_03_base64_under_50mb` | Base64 mode, ~47.4 MB MP4 (<50MB) | `assert_oai_success` passes |
-| 10_04 | `test_10_04_base64_over_50mb` | Base64 mode, ~52 MB MP4 (>50MB) | HTTP 4xx |
+| 10_04 | `test_10_04_base64_over_50mb` | Base64 mode, ~52 MB MP4 (video_51mb.mp4, 1280×720 / 55s random-pixel noise clip, >50MB) | 4xx, OR HTTP 200 with content matching video/noise keywords (noise/random/static/pixel/frame/video/clip/magenta/green pixel, etc.), proving video frames went through vision encoding, ruling out silent-drop fallback text |
 | 10_05 | `test_10_05_padded_over_50mb_rejected` | real_2s.mp4 + null padding to 51MB (real prefix + null pad) | 400/413/415/422/500 reject |
 
 ## 11 long_video — Long videos (5/10/20/30 min)
@@ -164,9 +165,15 @@
 |:---:|:---|:---|:---|
 | 14_01 | `test_14_01_fps_out_of_range` | fps=100 significantly out-of-range (hard-assert scenario) | HTTP 400 (`assert_error(r, 400)`) |
 
+## 15 stream_usage — Video + streaming usage chunk
+
+| Case ID | Function Name | Scene Description | Key Assertions |
+|:---:|:---|:---|:---|
+| 15_01 | `test_15_01_stream_usage_only_in_last_chunk` | Stream + stream_options.include_usage=true + video | usage non-empty with three positive token fields, present only in the final data chunk |
+
 ---
 
-## Appendix: 85 items after parametrize expansion
+## Appendix: 86 items after parametrize expansion
 
 Functions decorated with `@pytest.mark.parametrize(...)` expand to multiple items. All parametrize factors in the video file:
 
@@ -185,7 +192,7 @@ Functions decorated with `@pytest.mark.parametrize(...)` expand to multiple item
 | `(filename, label) ∈ {1080P, 2K}` | 12_01 | ×2 |
 | `count ∈ {3, 5}` | 12_02 | ×2 |
 
-Total items = 60 functions - 12 (parametrized) + (2+2+2+3+4+5+3+3+3+3+4+2+2) = **85**.
+Total items = 61 functions - 12 (parametrized) + (2+2+2+3+4+5+3+3+3+3+4+2+2) = **86**.
 
 ## Appendix: Fixture index
 

@@ -2,7 +2,7 @@
 
 > Source file: `data/m3_api_test/m3_image_tests.py`
 > Naming convention: `test_<2-digit module id>_<2-digit in-module sequence>_<scenario description>`
-> Module count: **13**; case function count: **62**; pytest collected items: **99**
+> Module count: **13**; case function count: **63**; pytest collected items: **100**
 
 ## Module Overview
 
@@ -15,13 +15,13 @@
 | 05 | multiturn_multimodal | Multi-turn multimodal dialog (images interleaved) | 1 | 2 |
 | 06 | image_tool_combo | Image + tool_call combination | 1 | 2 |
 | 07 | image_thinking_combo | Image + thinking variant combinations | 4 | 4 |
-| 08 | image_stream_usage | Image + streaming usage chunk | 2 | 3 |
+| 08 | image_stream_usage | Image + streaming usage chunk | 3 | 4 |
 | 09 | image_param | Image-related params / Usage arithmetic / Error tolerance | 5 | 8 |
 | 10 | resolution_tier | Tier / max_long_side_pixel / max_total_pixels / aspect ratio | 14 | 26 |
 | 11 | image_size_limit | Single-image size cap / request-body cap / size gradient | 9 | 13 |
 | 12 | image_count_limit | Multi-image count upper bound (spec 1.3.6: ≤20) | 2 | 2 |
 | 13 | base64_compat | Base64 boundary tolerance | 4 | 4 |
-| | **Total** | | **62** | **99** |
+| | **Total** | | **63** | **100** |
 
 ---
 
@@ -89,6 +89,7 @@
 |:---:|:---|:---|:---|
 | 08_01 | `test_08_01_stream_include_usage` | Stream + stream_options.include_usage=true + image | HTTP 200 |
 | 08_02 | `test_08_02_multiturn_two_images[non_stream\|stream]` | Turn 1 red image + Turn 2 blue image follow-up | HTTP 200 |
+| 08_03 | `test_08_03_stream_usage_only_in_last_chunk` | Stream + stream_options.include_usage=true + image | usage non-empty with three positive token fields, present only in the final data chunk |
 
 ## 09 image_param — Image params / Usage arithmetic / Error tolerance
 
@@ -130,7 +131,7 @@
 | 11_01 | `test_11_01_oversized_image_12mb[non_stream\|stream]` | 12MB image (exceeds old 10MB cap), soft | HTTP 200 / 400 |
 | 11_02 | `test_11_02_oversized_image_strict` | 12MB real-image base64 (sx1.jpg + zero padding) | HTTP 200 or 4xx both pass (switched to real-image padding to avoid silent drop on solid-color PNGs in some implementations; assertion relaxed from strict 4xx to "200 or 4xx" since both are valid under M3 contract) |
 | 11_03 | `test_11_03_url_under_10mb` | URL path ~9.2MB PNG (< 10MB cap) | HTTP 200 |
-| 11_04 | `test_11_04_url_over_10mb` | URL path ~11.1MB PNG (> 10MB cap) | HTTP 4xx |
+| 11_04 | `test_11_04_url_over_10mb` | URL path ~11.1MB PNG (image_11mb.png, random-pixel noise PNG, > 10MB old cap, within M3 30MB cap) | 4xx, OR HTTP 200 with content matching noise keywords (noise/random/static/pixel/snow/chaotic/test pattern, etc.), proving vision actually ran rather than a silent fallback |
 | 11_05 | `test_11_05_base64_under_10mb` | Base64 path ~9.2MB PNG (< 10MB cap) | HTTP 200 |
 | 11_06 | `test_11_06_base64_over_10mb` | Base64 path ~11.1MB PNG (> 10MB cap) | HTTP 200 or 4xx both pass (2026-06-04 revision: assertion relaxed from 4xx to "200 or 4xx", aligned with 11_02 / 11_07 / 11_08) |
 | 11_07 | `test_11_07_oversize_31mb_m3_limit` | 31MB real-image base64 (sx1.jpg + zero padding, M3 30MB upper limit) | HTTP 200 or 4xx both pass (switched to real-image padding to avoid silent drop on solid-color PNGs in some implementations; assertion relaxed to "200 or 4xx") |
@@ -139,12 +140,12 @@
 
 ## 12 image_count_limit — Multi-image count upper bound
 
-spec 1.3.6: "Each request supports up to 20 images." Both sides of the boundary are covered (=N passes / =N+1 rejected).
+spec 1.3.6: "Each request supports up to 200 images." at_max uses 200 (spec cap), over_max uses 201 (one over). To avoid sx1.jpg (~3,400 tokens/image) blowing past the decoder's max_model_len=524,288 at 200 images, we switched to `make_png_base64(672, 672)` synthetic PNGs (~600 tokens/image), with RGB varying by idx to defeat provider-side dedup.
 
 | Case ID | Function | Scenario | Assertion |
 |:---:|:---|:---|:---|
-| 12_01 | `test_12_01_count_at_max` | One request with 20 images (at cap) | HTTP 200 |
-| 12_02 | `test_12_02_count_over_max` | One request with 21 images (over cap) | 4xx rejection OR 200 + non-empty response (counter-example is 200 + empty content) |
+| 12_01 | `test_12_01_count_at_max` | One request with **200** 672×672 synthetic PNGs (spec 1.3.6 cap; RGB varies with idx to defeat dedup; base64 data URL; ~600 tokens/image leaves headroom under max_model_len) | HTTP 200 AND content explicitly acknowledges seeing 200 images (rules out silent truncation to a smaller count) |
+| 12_02 | `test_12_02_count_over_max` | One request with **201** 672×672 synthetic PNGs (one over the cap) | 4xx rejection, OR HTTP 200 AND content explicitly acknowledges seeing 201 images (no silent undercount allowed) |
 
 ## 13 base64_compat — Base64 boundary tolerance
 

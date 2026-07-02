@@ -2,7 +2,7 @@
 
 > 对应文件:`data/m3_api_test/m3_video_tests.py`
 > 命名规范:`test_<模块编号 2 位>_<模块内顺序编号 2 位>_<场景说明>`
-> 模块数:**14**;case 函数数:**60**;pytest 收集 items 数:**85**
+> 模块数:**15**;case 函数数:**61**;pytest 收集 items 数:**86**
 
 ## 模块总览
 
@@ -22,7 +22,8 @@
 | 12 | media_gradient | 分辨率梯度 / 多视频梯度 | 4 | 6 |
 | 13 | video_extension | reasoning_split 等扩展字段 | 1 | 2 |
 | 14 | error_codes | 视频相关错误码 | 1 | 1 |
-| | **合计** | | **60** | **85** |
+| 15 | stream_usage | 视频 + 流式 usage chunk | 1 | 1 |
+| | **合计** | | **61** | **86** |
 
 ---
 
@@ -31,14 +32,14 @@
 | Case ID | 函数名 | 场景说明 | 主要校验点 |
 |:---:|:---|:---|:---|
 | 01_01 | `test_01_01_base64_video` | base64 最小 MP4 + "What do you see" | HTTP 200 + content 非空(> 20 字符) |
-| 01_02 | `test_01_02_base64_real_pony_cartoon` | 真实素材(春节卡通小马 5MB)base64 输入 | HTTP 200 + content > 50 字符(验内容理解) |
+| 01_02 | `test_01_02_base64_real_pony_cartoon` | 真实素材(春节卡通小马 5MB)base64 输入,`max_tokens=4096` | HTTP 200 + content > 50 字符 + **主体关键词命中**(horse/pony/cartoon/马/小马/卡通/...)+ **春节场景关键词命中**(lantern/firecracker/spring festival/灯笼/鞭炮/春节/元宝/中国结/红色/金色/...) |
 
 ## 02 url_video — URL 视频接受性
 
 | Case ID | 函数名 | 场景说明 | 主要校验点 |
 |:---:|:---|:---|:---|
 | 02_01 | `test_02_01_url_video` | 公网示例 mp4 URL(`SAMPLE_VIDEO_URL`) | HTTP 200 + content 非空(> 20 字符) |
-| 02_02 | `test_02_02_url_real_pony_cartoon` | 真实素材(春节卡通小马)经 OSS URL 输入 | HTTP 200 + content > 50 字符 |
+| 02_02 | `test_02_02_url_real_pony_cartoon` | 真实素材(春节卡通小马)经 OSS URL 输入,`max_tokens=4096` | HTTP 200 + content > 50 字符 + **主体关键词命中**(horse/pony/cartoon/马/小马/卡通/...)+ **春节场景关键词命中**(lantern/firecracker/spring festival/灯笼/鞭炮/春节/元宝/中国结/红色/金色/...) |
 
 ## 03 video_format — 视频容器/MIME 格式
 
@@ -127,7 +128,7 @@
 | 10_01 | `test_10_01_url_under_50mb` | URL 方式 ~47.4 MB MP4(<50MB) | `assert_oai_success` 通过 |
 | 10_02 | `test_10_02_url_over_50mb` | URL 方式 ~52 MB MP4(>50MB,服务端下载后拒绝) | HTTP 4xx |
 | 10_03 | `test_10_03_base64_under_50mb` | Base64 方式 ~47.4 MB MP4(<50MB) | `assert_oai_success` 通过 |
-| 10_04 | `test_10_04_base64_over_50mb` | Base64 方式 ~52 MB MP4(>50MB) | HTTP 4xx |
+| 10_04 | `test_10_04_base64_over_50mb` | Base64 方式 ~52 MB MP4(video_51mb.mp4,1280×720 / 55s 随机像素噪点视频,>50MB) | 4xx,或 HTTP 200 + content 命中视频/噪点关键词(noise/random/static/pixel/frame/video/clip/magenta/green pixel 等),证明视频帧真的进了视觉编码,排除 silent-drop fallback 文本 |
 | 10_05 | `test_10_05_padded_over_50mb_rejected` | real_2s.mp4 + null padding 到 51MB(真实开头 + null 填充) | 400/413/415/422/500 拒绝 |
 
 ## 11 long_video — 长视频(5/10/20/30 min)
@@ -164,9 +165,15 @@
 |:---:|:---|:---|:---|
 | 14_01 | `test_14_01_fps_out_of_range` | fps=100 显著越界(硬断言场景) | HTTP 400(`assert_error(r, 400)`) |
 
+## 15 stream_usage — 视频 + 流式 usage chunk
+
+| Case ID | 函数名 | 场景说明 | 主要校验点 |
+|:---:|:---|:---|:---|
+| 15_01 | `test_15_01_stream_usage_only_in_last_chunk` | 流式 + stream_options.include_usage=true + 视频 | usage 非空且三字段 > 0,且只出现在流式最后一个 data chunk |
+
 ---
 
-## 附录:parametrize 展开后的 85 个 items
+## 附录:parametrize 展开后的 86 个 items
 
 凡函数签名带 `@pytest.mark.parametrize(...)` 的会展开成多个 items。视频文件里所有 parametrize 展开因子如下:
 
@@ -185,7 +192,7 @@
 | `(filename, label) ∈ {1080P, 2K}` | 12_01 | ×2 |
 | `count ∈ {3, 5}` | 12_02 | ×2 |
 
-总 items = 60 函数 - 12 (parametrize 函数) + (2+2+2+3+4+5+3+3+3+3+4+2+2) = **85**。
+总 items = 61 函数 - 12 (parametrize 函数) + (2+2+2+3+4+5+3+3+3+3+4+2+2) = **86**。
 
 ## 附录:固定 fixture 索引
 

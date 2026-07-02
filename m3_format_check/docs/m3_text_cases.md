@@ -2,14 +2,14 @@
 
 > 对应文件:`data/m3_api_test/m3_text_tests.py`
 > 命名规范:`test_<模块编号>_<模块内顺序编号>_<场景说明>`
-> 模块数:**20**;case 函数数:**106**;pytest 收集 items 数:**138**
+> 模块数:**20**;case 函数数:**108**;pytest 收集 items 数:**140**
 
 ## 模块总览
 
 | 模块编号 | 模块名 | 主题 | 函数数 |
 |:---:|:---|:---|:---:|
 | 01 | basic_text | 基础文本对话(非流式) | 3 |
-| 02 | sse_stream | SSE 流式协议字段 | 5 |
+| 02 | sse_stream | SSE 流式协议字段 | 6 |
 | 03 | multiturn | 多轮对话 | 2 |
 | 04 | thinking | thinking 思考开关 | 4 |
 | 05 | sampling | 采样参数(temperature / top_p / seed) | 3 |
@@ -20,7 +20,7 @@
 | 10 | usage_field | usage 字段语义/算术/cache | 8 |
 | 11 | role_root | role=root 协议接受与身份遵循 | 4 |
 | 12 | text_semantic | 文本语义遵循 | 6 |
-| 13 | tool_call_basic | 工具调用基础 | 11 |
+| 13 | tool_call_basic | 工具调用基础 | 12 |
 | 14 | tool_call_schema | 工具调用 schema 高级校验 | 6 |
 | 15 | tool_call_combo | 工具调用与其他特性组合 | 6 |
 | 16 | tool_call_edge | 工具调用边界 / 异常处理 | 14 |
@@ -48,6 +48,7 @@
 | 02_03 | `test_02_03_sse_done_marker` | SSE 结束 `[DONE]` 标记 | 缺失则 xfail(已知 BUG) |
 | 02_04 | `test_02_04_stream_chunk_fields` | 流式 chunk 必带字段 | id / choices / object 全部存在 |
 | 02_05 | `test_02_05_text_include_usage` | `stream_options.include_usage=true` 文本场景 | 流应正常返回 usage chunk |
+| 02_06 | `test_02_06_stream_usage_only_in_last_chunk` | `stream_options.include_usage=true` 文本场景 | usage 非空且三字段 > 0,且只出现在流式最后一个 data chunk |
 
 ## 03 multiturn — 多轮对话
 
@@ -70,7 +71,7 @@
 | Case ID | 函数名 | 场景说明 | 主要校验点 |
 |:---:|:---|:---|:---|
 | 05_01 | `test_05_01_temperature_values` | temperature 合法值 [0, 0.5, 1, 2] | 各取值均 200 |
-| 05_02 | `test_05_02_top_p` | top_p 边界值 [0, 0.5, 1.0] | 各取值均 200 |
+| 05_02 | `test_05_02_top_p` | top_p 边界值 [0.1, 0.5, 0.95] | 各取值均 200 |
 | 05_03 | `test_05_03_seed_parameter` | seed=42 + temperature=0 | 接口接受用于确定性输出 |
 
 ## 06 max_tokens — max_tokens / max_completion_tokens 边界
@@ -137,9 +138,9 @@
 | Case ID | 函数名 | 场景说明 | 主要校验点 |
 |:---:|:---|:---|:---|
 | 11_01 | `test_11_01_role_root_accepted` | 接口接受 role=root | 200 + 非空回答 |
-| 11_02 | `test_11_02_root_overrides_system` | root + system 冲突 | 自称 minimax-taoxi-m3 |
-| 11_03 | `test_11_03_only_system_identity` | 仅 system 写身份 | 自称 minimax-taoxi-m3 |
-| 11_04 | `test_11_04_only_root_identity` | 仅 root 写身份 | 自称 minimax-taoxi-m3 |
+| 11_02 | `test_11_02_root_overrides_system` | root + system 冲突,`thinking=adaptive` + `reasoning_split` | 自称 MiniMax-M3-taoxi(整串严格匹配) |
+| 11_03 | `test_11_03_only_system_identity` | 仅 system 写身份,`thinking=adaptive` | 自称 MiniMax-M3-taoxi(整串严格匹配) |
+| 11_04 | `test_11_04_only_root_identity` | 仅 root 写身份,`thinking=adaptive` | 自称 MiniMax-M3-taoxi(整串严格匹配) |
 
 ## 12 text_semantic — 文本语义遵循
 
@@ -167,6 +168,7 @@
 | 13_09 | `test_13_09_tool_stream_auto` | tool_choice=auto + 流式 | 流中含 tool_call chunk |
 | 13_10 | `test_13_10_tool_structure` | tool_call 返回结构 | get_weather + Beijing + schema required 字段就位 |
 | 13_11 | `test_13_11_stream_tool_rebuild` | 流式 tool_call delta 重建 | rebuild 后含 get_weather + Beijing |
+| 13_12 | `test_13_12_tool_name_mismatch_prompt` | 用 few-shot 引导:上一轮 assistant 已 tool_call get_weather/Beijing 且 tool 已成功回灌,本轮 user 问上海;tools 只给 read_file | 模型应延续 pattern 输出 tool_call 调 get_weather + location≈Shanghai + finish_reason=tool_calls |
 
 ## 14 tool_call_schema — 工具调用 schema 高级校验
 
@@ -215,6 +217,9 @@
 |:---:|:---|:---|:---|
 | 17_01 | `test_17_01_long_conversation_20_rounds` | 20 轮 / 40 条 message | HTTP 200 |
 | 17_02 | `test_17_02_long_system_10k` | ~10K tokens 长 system | HTTP 200 |
+| 17_03 | `test_17_03_long_input_512k` | 合成 system,ctx_tokens ∈ {512000, 524288}(覆盖 10 进制 512k 与 2 进制 512×1024 两种解读),max_tokens=16 | HTTP 200(M3 必须兑现宣称的 512k 窗口) |
+| 17_04 | `test_17_04_real_text_512k_xiyouji` | 西游记全文(~553k tokens,超过 512k 边界)作 system,提问主角名;max_tokens=4096 | HTTP 200 ≤ status < 500(禁 5xx);**仅当 200** 时校验 content/reasoning 出现"孙悟空 / 唐僧 / 三藏 / 玄奘"等任一 canonical 名 |
+| 17_05 | `test_17_05_xiyouji_below_524288_tokens` | 西游记前 624,598 chars(≈ 524,011 tokens,刚好低于 512×1024)作 system,提问主角名;max_tokens=4096 | 严格 HTTP 200 + 命中 canonical 主角名 |
 
 ## 18 reasoning_split — reasoning_split 扩展字段
 
@@ -244,14 +249,14 @@
 
 ---
 
-## 附录:parametrize 展开后的 138 个 items
+## 附录:parametrize 展开后的 140 个 items
 
 凡函数签名带 `@pytest.mark.parametrize("stream", [False, True], ids=["non_stream", "stream"])` 的会展开为 2 个 items;`max_tokens` 的两个 case 各展开为 2 个 items。
 
 | 展开因子 | 涉及 case |
 |:---|:---|
-| `stream ∈ {non_stream, stream}` | 07_01 / 07_02 / 07_03 / 07_04 / 07_05 / 07_06 / 09_03 / 11_01 / 11_02 / 11_03 / 11_04 / 14_06 / 15_01 / 15_02 / 15_03 / 15_04 / 15_05 / 16_02 / 16_03 / 16_05 / 16_06 / 16_08 / 16_09 / 16_10 / 16_11 / 16_12 / 16_13 / 17_01 / 17_02 / 18_01 |
+| `stream ∈ {non_stream, stream}` | 07_01 / 07_02 / 07_03 / 07_04 / 07_05 / 07_06 / 09_03 / 11_01 / 11_02 / 11_03 / 11_04 / 14_06 / 15_01 / 15_02 / 15_03 / 15_04 / 15_05 / 16_02 / 16_03 / 16_05 / 16_06 / 16_08 / 16_09 / 16_10 / 16_11 / 16_12 / 16_13 / 17_01 / 17_02 / 17_03 / 17_04 / 17_05 / 18_01 |
 | `mt ∈ {512000, 524288}` | 06_09 |
 | `mt ∈ {524289, 1000000}` | 06_10 |
 
-总 items = 106 函数 - 30 (`stream` parametrize 函数) - 2 (`mt` parametrize 函数) + 30×2 + 2×2 = **138**。
+总 items = 108 函数 - 30 (`stream` parametrize 函数) - 2 (`mt` parametrize 函数) + 30×2 + 2×2 = **140**。
