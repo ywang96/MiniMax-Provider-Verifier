@@ -1508,6 +1508,143 @@ class TestToolCallSchema:
             msg=f"nested_schema stream={stream}",
         )
 
+    # ------------- 14_07 top-level oneOf tool schema -------------
+    # Verify a tool whose parameters use top-level `oneOf` (3 branches:
+    # number / stringList / numberList). Model must fire the tool three
+    # times in one turn, one call per branch, with the correct data types
+    # (int, list[str], list[int]) — never a stringified number and never a
+    # {"item": [...]} object wrapper around the array.
+
+    _ONEOF_EXAMPLE_TOOL = {
+        "type": "function",
+        "function": {
+            "name": "ExampleFunction",
+            "description": "An example function to verify the parameters.",
+            "parameters": {
+                "oneOf": [
+                    {
+                        "additionalProperties": False,
+                        "properties": {
+                            "number": {"type": "number", "description": "number"}
+                        },
+                        "type": "object",
+                    },
+                    {
+                        "additionalProperties": False,
+                        "properties": {
+                            "stringList": {
+                                "type": "array",
+                                "description": "list",
+                                "items": {"type": "string"},
+                            }
+                        },
+                        "type": "object",
+                    },
+                    {
+                        "additionalProperties": False,
+                        "properties": {
+                            "numberList": {
+                                "type": "array",
+                                "description": "list",
+                                "items": {"type": "number"},
+                            }
+                        },
+                        "type": "object",
+                    },
+                ],
+                "type": "object",
+            },
+        },
+    }
+
+    _ONEOF_USER_PROMPT = (
+        "调用 ExampleFunction, 连续三次, 中间不要等待, "
+        "第一次只用参数 number = 42, "
+        "第二次只用参数 stringList = [\"12\", \"34\"], "
+        "第三次只用参数 numberList = [12, 34]."
+    )
+
+    _ONEOF_EXPECTED_NUMBER = 42
+    _ONEOF_EXPECTED_STRING_LIST = ["12", "34"]
+    _ONEOF_EXPECTED_NUMBER_LIST = [12, 34]
+
+    @staticmethod
+    def _oneof_check_calls(calls: list) -> str | None:
+        """Return None if the batch passes strictly, else a short failure reason.
+
+        Strict rule (any failure -> FAIL):
+          - 3 tool_calls total, all named ExampleFunction
+          - Each arguments parses to a dict with exactly one oneOf branch key
+          - All three branches (number / stringList / numberList) are covered
+          - number is a numeric type (not string) AND value == 42
+          - stringList is a list AND every element is a string AND value == ["12", "34"]
+          - numberList is a list AND every element is a number AND value == [12, 34]
+        """
+        expected_num = TestToolCallSchema._ONEOF_EXPECTED_NUMBER
+        expected_str_list = TestToolCallSchema._ONEOF_EXPECTED_STRING_LIST
+        expected_num_list = TestToolCallSchema._ONEOF_EXPECTED_NUMBER_LIST
+
+        if len(calls) != 3:
+            return f"expected 3 tool_calls, got {len(calls)}"
+        for i, c in enumerate(calls):
+            if c["name"] != "ExampleFunction":
+                return f"call[{i}].name={c['name']!r}, expected ExampleFunction"
+            if not isinstance(c["arguments_obj"], dict):
+                return f"call[{i}].arguments not a dict: {c['arguments_raw']!r}"
+
+        branches = {}
+        for i, c in enumerate(calls):
+            keys = list(c["arguments_obj"].keys())
+            if len(keys) != 1 or keys[0] not in ("number", "stringList", "numberList"):
+                return f"call[{i}] args keys={keys!r}, expected exactly one of number/stringList/numberList"
+            branches[keys[0]] = c["arguments_obj"]
+        if set(branches) != {"number", "stringList", "numberList"}:
+            return f"branches covered={sorted(branches)}, expected all three"
+
+        # number
+        num_val = branches["number"]["number"]
+        if isinstance(num_val, bool) or not isinstance(num_val, (int, float)):
+            return f"number must be numeric, got {type(num_val).__name__}={num_val!r}"
+        if num_val != expected_num:
+            return f"number expected {expected_num}, got {num_val!r}"
+
+        # stringList
+        s_list = branches["stringList"]["stringList"]
+        if not isinstance(s_list, list):
+            return f"stringList must be a list, got {type(s_list).__name__}={s_list!r}"
+        if not all(isinstance(x, str) for x in s_list):
+            return f"stringList elements must all be str, got {s_list!r}"
+        if s_list != expected_str_list:
+            return f"stringList expected {expected_str_list!r}, got {s_list!r}"
+
+        # numberList
+        n_list = branches["numberList"]["numberList"]
+        if not isinstance(n_list, list):
+            return f"numberList must be a list, got {type(n_list).__name__}={n_list!r}"
+        if not all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in n_list):
+            return f"numberList elements must all be number, got {n_list!r}"
+        if [float(x) for x in n_list] != [float(x) for x in expected_num_list]:
+            return f"numberList expected {expected_num_list!r}, got {n_list!r}"
+        return None
+
+    @pytest.mark.timeout(300)
+    def test_14_07_oneof_toplevel_schema_stream(self):
+        """Stream: single request must produce 3 ExampleFunction calls (one per oneOf branch) with correct types.
+
+        Failure modes we care about:
+          - `number` returned as the string "123" instead of the number 123
+          - stringList / numberList returned as {"item": [...]} object wrappers
+          - stringList element types coerced to numbers, or numberList to strings
+        """
+        r = oai_chat({
+            "messages": oai_simple_messages(self._ONEOF_USER_PROMPT),
+            "tools": [self._ONEOF_EXAMPLE_TOOL],
+        }, stream=True)
+        assert_oai_stream_success(r)
+        calls = get_tool_calls(r)
+        reason = self._oneof_check_calls(calls)
+        assert reason is None, f"oneof toplevel stream: {reason}. calls={calls}"
+
 
 # ============================================================
 # 15 tool_call_combo — tool call combined with other features
